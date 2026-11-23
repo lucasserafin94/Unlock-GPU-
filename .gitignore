@@ -1,0 +1,13 @@
+﻿# Saidas locais
+*.log
+tests/out/
+tests/review/
+tests/research/
+# Registros de hardware e diagnosticos pessoais (nao vao para o repositorio)
+diagnostico/
+# Build
+bin/
+obj/
+*.user
+.vs/
+publish/
