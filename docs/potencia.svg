@@ -1,41 +1,52 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="430" viewBox="0 0 1200 430" role="img" aria-label="Faixas de potência de uma GPU de notebook e onde o Unlock GPU atua">
-  <rect width="1200" height="430" rx="22" fill="#14191E"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500" viewBox="0 0 1200 500" role="img" aria-label="Faixas de potência de uma GPU de notebook e onde o Unlock GPU atua, com e sem o kit de offset da vBIOS">
+  <rect width="1200" height="500" rx="22" fill="#14191E"/>
   <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif">
     <text x="40" y="52" fill="#E8ECEF" font-size="26" font-weight="700">Onde está o potencial escondido</text>
-    <text x="40" y="82" fill="#8A949C" font-size="16">Exemplo: RTX 5090 Laptop (95–150 W + 25 W de Dynamic Boost). A placa aguenta até o teto, mas muitos notebooks rodam abaixo dele.</text>
+    <text x="40" y="82" fill="#8A949C" font-size="16">Exemplo: RTX 5090 Laptop (família Tongfang/Uniwill). O app libera o teto original; com o kit de offset da vBIOS, o próprio teto sobe — de 175 W para 250 W.</text>
+
+    <!-- tetos -->
+    <line x1="780" y1="96" x2="780" y2="400" stroke="#C96A63" stroke-width="2" stroke-dasharray="6 5"/>
+    <text x="780" y="108" fill="#E08D86" font-size="14" font-weight="700" text-anchor="middle">teto original da vBIOS · 175 W</text>
+    <line x1="1080" y1="96" x2="1080" y2="400" stroke="#BAF568" stroke-width="3"/>
+    <text x="1080" y="108" fill="#BAF568" font-size="14" font-weight="700" text-anchor="middle">com o kit · até 250 W</text>
+
+    <!-- barra 1: de fabrica -->
+    <text x="80" y="126" fill="#D3DAE0" font-size="15" font-weight="600">De fábrica (modo do fabricante): ≈ 110 W</text>
+    <rect x="80" y="138" width="440" height="40" rx="8" fill="#2A3138"/>
+    <text x="96" y="164" fill="#B5BEC5" font-size="14">≈ 110 W · limitado pelo modo do fabricante</text>
+    <rect x="520" y="138" width="260" height="40" rx="8" fill="none" stroke="#BAF568" stroke-width="2" stroke-dasharray="7 6"/>
+    <text x="650" y="164" fill="#BAF568" font-size="14" font-weight="600" text-anchor="middle">potencial parado</text>
+
+    <!-- barra 2: caminho padrao do app -->
+    <text x="80" y="220" fill="#D3DAE0" font-size="15" font-weight="600">Caminho padrão do app: TGP configurável + Dynamic Boost, até o teto original</text>
+    <rect x="80" y="232" width="380" height="40" rx="8" fill="#3D5A2C"/>
+    <text x="96" y="258" fill="#E8ECEF" font-size="14">TGP base · 95 W</text>
+    <rect x="460" y="232" width="220" height="40" fill="#5C8A3A"/>
+    <text x="570" y="258" fill="#E8ECEF" font-size="14" text-anchor="middle">TGP configurável · até 150 W</text>
+    <rect x="680" y="232" width="100" height="40" rx="8" fill="#BAF568"/>
+    <text x="730" y="258" fill="#11161B" font-size="13" font-weight="700" text-anchor="middle">Boost +25</text>
+
+    <!-- barra 3: com o kit -->
+    <text x="80" y="314" fill="#D3DAE0" font-size="15" font-weight="600">Com o kit de offset da vBIOS (aba ROM): o teto sobe de 175 W para 250 W</text>
+    <rect x="80" y="326" width="380" height="40" rx="8" fill="#3D5A2C"/>
+    <text x="96" y="352" fill="#E8ECEF" font-size="14">TGP base · 95 W</text>
+    <rect x="460" y="326" width="220" height="40" fill="#5C8A3A"/>
+    <text x="570" y="352" fill="#E8ECEF" font-size="14" text-anchor="middle">TGP configurável · até 150 W</text>
+    <rect x="680" y="326" width="100" height="40" fill="#BAF568"/>
+    <text x="730" y="352" fill="#11161B" font-size="13" font-weight="700" text-anchor="middle">Boost +25</text>
+    <rect x="780" y="326" width="300" height="40" rx="8" fill="#D9FF8A"/>
+    <text x="930" y="352" fill="#11161B" font-size="14" font-weight="700" text-anchor="middle">além do teto original · até 250 W</text>
 
     <!-- eixo -->
-    <line x1="80" y1="330" x2="1120" y2="330" stroke="#3A434B" stroke-width="2"/>
+    <line x1="80" y1="400" x2="1140" y2="400" stroke="#3A434B" stroke-width="2"/>
     <g fill="#8A949C" font-size="13" text-anchor="middle">
-      <text x="80" y="354">0 W</text><text x="340" y="354">50</text><text x="600" y="354">100</text><text x="860" y="354">150</text><text x="1120" y="354">200 W</text>
+      <text x="80" y="424">0 W</text><text x="280" y="424">50</text><text x="480" y="424">100</text><text x="680" y="424">150</text><text x="880" y="424">200</text><text x="1080" y="424">250 W</text>
     </g>
-
-    <!-- barra: modo atual do notebook -->
-    <text x="80" y="128" fill="#D3DAE0" font-size="15" font-weight="600">Como muitos notebooks saem de fábrica (modo silencioso ou equilibrado)</text>
-    <rect x="80" y="140" width="574" height="40" rx="8" fill="#2A3138"/>
-    <text x="96" y="166" fill="#B5BEC5" font-size="14">≈ 110 W  ·  limitado pelo modo do fabricante</text>
-    <rect x="654" y="140" width="336" height="40" rx="8" fill="none" stroke="#BAF568" stroke-width="2" stroke-dasharray="7 6"/>
-    <text x="822" y="166" fill="#BAF568" font-size="14" font-weight="600" text-anchor="middle">potencial parado</text>
-
-    <!-- barra: com o Unlock GPU -->
-    <text x="80" y="222" fill="#D3DAE0" font-size="15" font-weight="600">Com o Unlock GPU: modo e TGP do fabricante no máximo + offsets testados</text>
-    <rect x="80" y="234" width="494" height="40" rx="8" fill="#3D5A2C"/>
-    <rect x="574" y="234" width="286" height="40" fill="#5C8A3A"/>
-    <rect x="860" y="234" width="130" height="40" rx="8" fill="#BAF568"/>
-    <rect x="860" y="234" width="20" height="40" fill="#BAF568"/>
-    <text x="96" y="260" fill="#E8ECEF" font-size="14">TGP base · 95 W</text>
-    <text x="717" y="260" fill="#E8ECEF" font-size="14" text-anchor="middle">TGP configurável · até 150 W</text>
-    <text x="925" y="260" fill="#11161B" font-size="13" font-weight="700" text-anchor="middle">Dynamic Boost +25</text>
-
-    <!-- teto -->
-    <line x1="990" y1="112" x2="990" y2="330" stroke="#FF7B72" stroke-width="3"/>
-    <text x="980" y="300" fill="#FF7B72" font-size="14" font-weight="700" text-anchor="end">teto da placa (vBIOS) · 175 W</text>
-    <text x="980" y="320" fill="#FF9F97" font-size="13" text-anchor="end">o app não passa daqui</text>
 
     <!-- notas -->
     <g font-size="13" fill="#8A949C">
-      <text x="80" y="390">Os números são ilustrativos. O app lê os valores reais do seu notebook pelo driver e pelo controlador do fabricante.</text>
-      <text x="80" y="410">Offsets de clock aumentam o desempenho dentro da mesma potência; o ajuste automático mede o ganho real com benchmark.</text>
+      <text x="80" y="456">O kit grava os slots romOverride na chave da classe do driver e reinicia a placa em quente; sem ele, o app nunca passa do teto original.</text>
+      <text x="80" y="478">Os números são ilustrativos. O app lê os valores reais do seu notebook pelo driver e pelo controlador do fabricante.</text>
     </g>
   </g>
 </svg>

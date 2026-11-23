@@ -49,9 +49,18 @@ O problema é que **muitos notebooks não deixam a placa chegar perto desse teto
 | Clocks de fábrica conservadores | **offsets de núcleo e memória** dentro da faixa que o driver aceita, com ajuste automático que mede o ganho real |
 | Ajustes que somem sozinhos | perfis aplicados ao entrar no Windows e reaplicados depois de um reinício do driver |
 
-> **Até onde ele vai:** o Unlock GPU leva a placa até o teto que ela mesma informa e tira o máximo de desempenho dentro dele. No caminho padrão ele **não ultrapassa** o limite gravado na vBIOS pela NVIDIA e pelo fabricante, porque isso exige modificar firmware e coloca o hardware em risco — com uma exceção documentada: o kit opcional `app/UnlockGpu.Core/Patch` grava os slots `romOverrideXX` na chave de classe do driver para elevar esse teto (detalhes em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
+> **Até onde ele vai:** o Unlock GPU leva a placa até o teto que ela mesma informa e tira o máximo de desempenho dentro dele. No caminho padrão ele **não ultrapassa** o limite gravado na vBIOS pela NVIDIA e pelo fabricante, porque isso exige modificar firmware e coloca o hardware em risco. Quando você quer ir além, existe um recurso de primeira classe: o **kit de offset da vBIOS (aba ROM)** grava os slots `romOverrideXX` na chave de classe do driver e reinicia a placa em quente — elevando o próprio teto, de 175 W para 250 W numa RTX 5090 Laptop (detalhes em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
 
 O controle de modo e TGP começa pelos notebooks **Tongfang/Uniwill** (PCSpecialist, XMG, TUXEDO, Eluktronics e outros), pela mesma interface que o painel do fabricante usa. Outras marcas vêm em seguida.
+
+## Download
+
+Baixe a versão mais recente na [página de releases](https://github.com/lucasserafin94/Unlock-GPU-/releases):
+
+- **Instalador** (`UnlockGPU-Setup-*.exe`): instala em *Program Files*, cria atalhos e desinstalador.
+- **Portable** (zip): extraia onde quiser e rode o `UnlockGPU.exe`.
+
+O app pede administrador ao abrir (a NVIDIA exige para aplicar ajustes). Os dados ficam em `%LOCALAPPDATA%\UnlockGPU`, as gravações de sessão em `Documentos\UnlockGPU\sessions` — nada é gravado na pasta do programa.
 
 ## Como funciona
 
@@ -65,9 +74,9 @@ O app conversa com a GPU **só por interfaces públicas**:
 |---|---|---|
 | **NVML** | `nvml.dll`, a biblioteca oficial que já vem com o driver da NVIDIA | leitura de potência, clocks, temperatura, P-state, motivos de corte; offsets de núcleo e memória; trava de clock da VRAM; limite de potência quando o notebook permite |
 | **D3D11** | parte do Windows | benchmark embutido e teste de memória de vídeo |
-| **WMI do fabricante** | a interface que o próprio painel do fabricante usa, documentada no kernel Linux | ler (e futuramente ajustar) o modo de desempenho e o TGP configurável em notebooks Tongfang/Uniwill |
+| **WMI do fabricante** | a interface que o próprio painel do fabricante usa, documentada no kernel Linux | ler e gravar o modo de desempenho, o TGP configurável e o Dynamic Boost em notebooks Tongfang/Uniwill |
 
-No caminho padrão ele **não** modifica a vBIOS, **não** grava valores escondidos no registro do driver e **não** passa do limite que a própria placa informa — exceto o kit opcional `app/UnlockGpu.Core/Patch` (slots `romOverrideXX` na chave de classe do driver), documentado em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md). As faixas de cada controle vêm sempre do driver, nunca de números fixos no código.
+No caminho padrão ele **não** modifica a vBIOS, **não** grava valores escondidos no registro do driver e **não** passa do limite que a própria placa informa — exceto o kit de offset da vBIOS (aba ROM; código em `app/UnlockGpu.Core/Patch`), que grava os slots `romOverrideXX` na chave de classe do driver e reinicia a placa em quente, documentado em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md). As faixas de cada controle vêm sempre do driver, nunca de números fixos no código.
 
 ### O ciclo de cada ajuste
 
@@ -125,17 +134,17 @@ Se o teste for cancelado, o driver reiniciar ou algo falhar, o offset original �
 | Trava do clock da VRAM por nível (P0 / P2), com detecção pela própria GPU | ✅ |
 | Gravação de sessões em CSV, com resumo sob carga | ✅ |
 | Limite de potência (nos notebooks que permitem) e teto da placa inteira | ✅ |
-| Benchmark D3D11 embutido e teste de VRAM | 🚧 |
-| Ajuste automático de offsets | 🚧 |
-| Perfis, aplicação ao entrar no Windows, reaplicar após reinício do driver | 🚧 |
-| Luz de saúde e alerta de estabilidade | 🚧 |
-| Backup e restauração dos valores | 🚧 |
-| Ícone na bandeja, janela compacta, cor de destaque | 🚧 |
-| Modo e TGP do fabricante (Tongfang/Uniwill): leitura | 🚧 |
-| Modo, TGP configurável e Dynamic Boost no máximo da placa (Tongfang/Uniwill) | 🔜 |
-| Instalador | 🔜 |
+| Benchmark D3D11 embutido e teste de VRAM | ✅ |
+| Ajuste automático de offsets | ✅ |
+| Perfis, aplicação ao entrar no Windows, reaplicar após reinício do driver | ✅ |
+| Luz de saúde e alerta de estabilidade | ✅ |
+| Backup e restauração dos valores | ✅ |
+| Ícone na bandeja e cor de destaque | ✅ |
+| Modo, TGP configurável e Dynamic Boost no máximo da placa (Tongfang/Uniwill): leitura e gravação | ✅ |
+| Kit de offset da vBIOS (romOverride): eleva o teto de 175 W para 250 W (aba ROM) | ✅ |
+| Instalador | ✅ |
 
-✅ pronto · 🚧 em construção (versão 4, em C#) · 🔜 planejado
+✅ pronto · 🚧 em construção · 🔜 planejado
 
 ## Idiomas
 
@@ -159,8 +168,6 @@ dotnet build UnlockGPU.slnx -c Release
 
 Precisa do [.NET 10 SDK](https://dotnet.microsoft.com/download). O projeto não usa nenhum pacote externo.
 
-> O código da versão 4 está sendo publicado neste repositório aos poucos; enquanto isso, este comando pode ainda não encontrar a solução.
-
 ## Segurança
 
 - Use por sua conta e risco. Overclock pode causar instabilidade, travamentos e falhas na imagem.
@@ -170,10 +177,9 @@ Precisa do [.NET 10 SDK](https://dotnet.microsoft.com/download). O projeto não 
 
 ## Roteiro
 
-1. Versão 4 em C#: tudo da tabela acima.
-2. Ajuste do TGP pelo modo do fabricante (Tongfang/Uniwill), depois outras marcas por interfaces documentadas.
+1. ✅ Versão 4 em C#: tudo da tabela acima, incluindo o kit de offset da vBIOS e o instalador.
+2. Modo, TGP configurável e Dynamic Boost nas outras marcas, pelas interfaces documentadas de cada uma.
 3. Comparação de eficiência (FPS por watt) entre perfis.
-4. Instalador e atualização automática.
 
 ---
 
@@ -181,14 +187,16 @@ Precisa do [.NET 10 SDK](https://dotnet.microsoft.com/download). O projeto não 
 
 ## English
 
-**Unlock GPU** is a free Windows app that **unlocks the untapped potential of your laptop's NVIDIA GPU**. Many laptops ship running the GPU well below its rated maximum (silent or balanced vendor modes, configurable TGP or Dynamic Boost turned down). Unlock GPU shows exactly what is holding the card back, raises the vendor mode and configurable TGP up to the card's own ceiling on supported laptops (Tongfang/Uniwill first), and tunes clocks within the driver's range. By default it never goes beyond the limit stored in the vBIOS — one documented exception: the optional romOverride patch kit (see [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
+**Unlock GPU** is a free Windows app that **unlocks the untapped potential of your laptop's NVIDIA GPU**. Many laptops ship running the GPU well below its rated maximum (silent or balanced vendor modes, configurable TGP or Dynamic Boost turned down). Unlock GPU shows exactly what is holding the card back, raises the vendor mode and configurable TGP up to the card's own ceiling on supported laptops (Tongfang/Uniwill first), and tunes clocks within the driver's range. By default it never goes beyond the limit stored in the vBIOS; when you want more, the built-in **vBIOS offset kit (ROM tab)** writes the `romOverrideXX` slots to the driver's class key and hot-restarts the card, raising the ceiling itself from 175 W to 250 W on an RTX 5090 Laptop (see [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
 
 - **Live monitor** of power (now and average), core, SM and memory clocks, VRAM use, P-state, temperature and utilisation, with every clock-limit reason shown as a readable tag ("power limited", "thermal", "power brake").
 - **Core and memory offsets** within the range the driver reports, each one **read back from the hardware** and confirmed.
-- **Auto-tune** (in progress): raises the offset step by step, scores each step with a built-in D3D11 benchmark and a VRAM test, and always falls back to the last good value.
+- **Auto-tune**: raises the offset step by step, scores each step with a built-in D3D11 benchmark and a VRAM test, and always falls back to the last good value.
 - **VRAM clock lock**, session recording, profiles, startup apply, stability alerts and backup.
 - **8 languages**: Portuguese, English, Spanish, Italian, French, German, Russian and Japanese.
 
-It only uses public interfaces (NVIDIA NVML, Direct3D 11, the vendor's documented WMI). By default it does not modify the vBIOS or write hidden driver registry values — one documented exception: the optional romOverride patch kit — and never goes beyond the limits the card reports.
+It only uses public interfaces (NVIDIA NVML, Direct3D 11, the vendor's documented WMI). By default it does not modify the vBIOS or write hidden driver registry values — except for the built-in vBIOS offset kit (ROM tab) — and never goes beyond the limits the card reports.
+
+**Download**: latest version on the [releases page](https://github.com/lucasserafin94/Unlock-GPU-/releases) (installer or portable zip).
 
 Use at your own risk: overclocking can cause instability.

@@ -55,11 +55,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Profiles = new ProfilesViewModel(localizer, services.Profiles, services.Applier, services.Backup,
             services.Settings, dialogs, services.UiState, Banner);
         Oem = new OemViewModel(localizer, services.Oem, services.Gpu);
+        Rom = new RomViewModel(localizer, services.RomOverride, dialogs);
         Startup = new StartupViewModel(localizer, services.Startup, services.Profiles, services.Settings, Banner);
         Drift = new DriftViewModel(localizer, services.Profiles, services.Settings, services.UiState,
             name => Profiles.ApplyByNameAsync(name), Profiles.ResetToDefaultsAsync);
         Settings = new SettingsViewModel(localizer, services.Settings, theme, services.Monitor, Startup);
-        _tabs = [Monitor, Tuning, AutoTune, Sessions, Profiles, Oem, Settings];
+        _tabs = [Monitor, Tuning, AutoTune, Sessions, Profiles, Oem, Rom, Settings];
 
         VersionText = "v" + AppVersion();
         _s.Monitor.SampleArrived += OnSampleArrived;
@@ -90,6 +91,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public ProfilesViewModel Profiles { get; }
     /// <summary>OEM tab.</summary>
     public OemViewModel Oem { get; }
+    /// <summary>vBIOS offset kit (romOverride) tab.</summary>
+    public RomViewModel Rom { get; }
     /// <summary>Settings tab.</summary>
     public SettingsViewModel Settings { get; }
     /// <summary>Start with Windows card (shown in the Settings tab).</summary>
@@ -124,6 +127,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         if (available) await Tuning.InitializeAsync().ConfigureAwait(true);
         await Startup.InitializeAsync().ConfigureAwait(true);
         await Oem.RefreshCommand.ExecuteAsync().ConfigureAwait(true);
+        await Rom.RefreshCommand.ExecuteAsync().ConfigureAwait(true);
     }
 
     /// <summary>Applies a profile by name (tray menu).</summary>

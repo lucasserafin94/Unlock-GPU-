@@ -5,14 +5,19 @@ using UnlockGpu.Core.Infrastructure;
 namespace UnlockGpu.Core.Oem;
 
 /// <summary>
-/// Read-only <see cref="IOemPowerService"/> for Uniwill laptops. Every EC access is a read (op 0x0100), calls are
-/// serialised and spaced by at least <see cref="MinCallSpacing"/>, and EC errors (0xFEFEFEFE) are retried once
-/// before the register is reported as failed. Writing is disabled in this build.
+/// <see cref="IOemPowerService"/> for Uniwill laptops. Every EC access is serialised and spaced by at least
+/// <see cref="MinCallSpacing"/>, and EC errors (0xFEFEFEFE) are retried once before the register is reported as
+/// failed. Reads use op 0x0100; <see cref="Apply"/> writes with op 0x0000 only the registers that actually change.
 /// </summary>
 public sealed class UniwillOemPowerService : IOemPowerService, IDisposable
 {
     /// <summary>Minimum delay between two GetSetULong calls (EC is slow; firmware tools use similar pacing).</summary>
     public static readonly TimeSpan MinCallSpacing = TimeSpan.FromMilliseconds(6);
+
+    /// <summary>Highest cTGP offset the UI/service accepts, in W above base TGP.</summary>
+    public const int CtgpOffsetMaxW = 160;
+    /// <summary>Highest Dynamic Boost offset the firmware accepts (register MXDB), in W.</summary>
+    public const int DbOffsetMaxW = 25;
 
     const int Attempts = 2;
 
@@ -111,8 +116,95 @@ public sealed class UniwillOemPowerService : IOemPowerService, IDisposable
     }
 
     /// <inheritdoc />
-    /// <exception cref="NotSupportedException">Always: writes are disabled in this build.</exception>
-    public OemApplyResult Apply(OemPowerRequest request) => throw new NotSupportedException("oem.writeDisabled");
+    public OemApplyResult Apply(OemPowerRequest request)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var state = ReadState();
+        if (state.FailedRegisters.Count > 0)
+            return new OemApplyResult(false, state, "oem.applyReadFailed");
+
+        var writes = new List<(ushort Register, byte Value)>();
+
+        // Performance mode: canonical values with the bits outside the mode mask preserved.
+        if (request.PerformanceMode is OemPerformanceMode mode && mode != OemPerformanceMode.Unknown)
+        {
+            byte current = state.PerformanceModeRaw ?? 0;
+            byte target = UniwillEc.EncodePerformanceMode(current, mode);
+            if (target != current) writes.Add((UniwillEc.Reg.PerformanceMode, target));
+        }
+
+        // cTGP and Dynamic Boost: enable bits in 0x0743 plus the offset registers.
+        bool touchControl = request.CtgpEnabled.HasValue || request.CtgpOffsetW.HasValue ||
+                            request.DynamicBoostEnabled.HasValue || request.DynamicBoostOffsetW.HasValue;
+        if (touchControl)
+        {
+            if (!state.ControlRaw.HasValue)
+                return new OemApplyResult(false, state, "oem.applyReadFailed");
+
+            byte control = state.ControlRaw.Value;
+            // An explicit offset implies the feature is wanted on; an explicit enable always wins.
+            bool ctgpOn = request.CtgpEnabled ?? (request.CtgpOffsetW.HasValue ? true : Bit(control, 2) == true);
+            bool dbOn = request.DynamicBoostEnabled ?? (request.DynamicBoostOffsetW.HasValue ? true : Bit(control, 1) == true);
+
+            int? ctgpOffset = request.CtgpOffsetW;
+            if (ctgpOffset is < 0 or > CtgpOffsetMaxW)
+                return new OemApplyResult(false, state, "oem.applyRange");
+            int? dbOffset = request.DynamicBoostOffsetW;
+            if (dbOffset is < 0 or > DbOffsetMaxW)
+                return new OemApplyResult(false, state, "oem.applyRange");
+
+            control = SetBit(control, 2, ctgpOn);
+            control = SetBit(control, 1, dbOn);
+            if ((ctgpOn || dbOn) && Bit(control, 0) != true)
+                control |= 0x01; // general gate: the offsets do nothing without it
+            if (control != state.ControlRaw.Value)
+                writes.Add((UniwillEc.Reg.GpuControl, control));
+
+            if (ctgpOffset.HasValue && state.CtgpOffsetW != ctgpOffset.Value)
+                writes.Add((UniwillEc.Reg.CtgpOffset, (byte)ctgpOffset.Value));
+            if (dbOffset.HasValue && state.DynamicBoostOffsetW != dbOffset.Value)
+                writes.Add((UniwillEc.Reg.DynamicBoostOffset, (byte)dbOffset.Value));
+        }
+
+        foreach (var (register, value) in writes)
+            if (!WriteRegister(register, value))
+                return new OemApplyResult(false, ReadState(), "oem.ecWriteFailed");
+
+        // Verify with a fresh full read: every written register must come back identical.
+        var readBack = ReadState();
+        bool verified = writes.All(w => w.Register switch
+        {
+            UniwillEc.Reg.PerformanceMode => readBack.PerformanceModeRaw == w.Value,
+            UniwillEc.Reg.GpuControl => readBack.ControlRaw == w.Value,
+            UniwillEc.Reg.CtgpOffset => readBack.CtgpOffsetW == w.Value,
+            UniwillEc.Reg.DynamicBoostOffset => readBack.DynamicBoostOffsetW == w.Value,
+            _ => false,
+        });
+        if (!verified)
+            _log?.Warn("OEM apply: verification mismatch after write.");
+        else
+            _log?.Info("OEM apply: wrote " + string.Join(", ", writes.Select(w => $"0x{w.Register:X4}={w.Value:X2}")) + ".");
+        return new OemApplyResult(verified, readBack, verified ? null : "oem.applyVerifyFailed");
+    }
+
+    /// <summary>Writes one register with pacing and a single retry on EC error.</summary>
+    bool WriteRegister(ushort register, byte value)
+    {
+        ulong data = UniwillEc.EncodeWrite(register, value);
+        for (int attempt = 0; attempt < Attempts; attempt++)
+        {
+            uint result;
+            lock (_gate)
+            {
+                Pace(default);
+                try { result = _channel.Invoke(data); }
+                finally { _lastCall = _clock.Elapsed; }
+            }
+            if (result != UniwillEc.EcError) return true;
+        }
+        _log?.Warn("OEM EC write failed for 0x" + register.ToString("X4", CultureInfo.InvariantCulture));
+        return false;
+    }
 
     byte? ReadRegister(ushort register, List<ushort> failed, CancellationToken ct)
     {
@@ -142,6 +234,8 @@ public sealed class UniwillOemPowerService : IOemPowerService, IDisposable
     }
 
     static bool? Bit(byte? value, int bit) => value is byte v ? (v & (1 << bit)) != 0 : null;
+
+    static byte SetBit(byte value, int bit, bool on) => on ? (byte)(value | (1 << bit)) : (byte)(value & ~(1 << bit));
 
     /// <inheritdoc />
     public void Dispose()

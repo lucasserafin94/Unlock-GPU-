@@ -9,7 +9,7 @@
 
 O NvpwrControl eleva o teto de potência da placa **além da vBIOS** gravando valores `romOverrideXX` na **chave de classe do driver** no registro (`CM_Locate_DevNodeW` + `CM_Open_DevNode_Key(CM_REGISTRY_SOFTWARE)`), e depois **reinicia o dispositivo** (`pnputil /restart-device`, timeout 45 s, tolerância 0,75 W; fallback: desabilitar → 900 ms → habilitar → 1600 ms). O driver relê os valores no start e a vBIOS passa a expor o novo teto — a NVML então reporta `MaxLimitW` maior **sozinha**, sem nenhuma mudança no resto do app.
 
-A captura em [`config/romoverride-capture.txt`](../config/romoverride-capture.txt) foi feita com o NvpwrControl **ativo** na sua GPU (RTX 4060 Laptop, Tongfang/Uniwill `1D05:60B7`), e decodifica exatamente assim:
+A captura em [`config/romoverride-capture.txt`](../config/romoverride-capture.txt) foi feita com o NvpwrControl **ativo** na sua GPU (RTX 5090 Laptop, Tongfang/Uniwill `1D05:60B7`), e decodifica exatamente assim:
 
 | Slot | Offset shadow | Largura | Valor bruto | Papel |
 |---|---|---|---|---|

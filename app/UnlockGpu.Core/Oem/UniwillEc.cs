@@ -18,8 +18,10 @@ public static class UniwillEc
 
     /// <summary>Operation code for an EC read.</summary>
     public const ushort OpRead = 0x0100;
-    /// <summary>Operation code for an EC write (not used in this build).</summary>
+    /// <summary>Operation code for an EC write (WKBC; the firmware also accepts 0x0001).</summary>
     public const ushort OpWrite = 0x0000;
+    /// <summary>Second accepted operation code for an EC write.</summary>
+    public const ushort OpWriteAlt = 0x0001;
     /// <summary>Return value that signals an EC error.</summary>
     public const uint EcError = 0xFEFEFEFE;
 
@@ -53,11 +55,21 @@ public static class UniwillEc
     /// <summary>Data argument for reading <paramref name="address"/>.</summary>
     public static ulong EncodeRead(ushort address) => Encode(address, 0, OpRead);
 
+    /// <summary>Data argument for writing <paramref name="value"/> to <paramref name="address"/> (WKBC).</summary>
+    public static ulong EncodeWrite(ushort address, byte value) => Encode(address, value, OpWrite);
+
     /// <summary>True only for a well-formed read request (operation <see cref="OpRead"/>, value 0, upper bits clear).</summary>
     public static bool IsRead(ulong data)
     {
         var (_, value, operation) = Decode(data);
         return operation == OpRead && value == 0 && (data >> 48) == 0;
+    }
+
+    /// <summary>True only for a well-formed write request (operation <see cref="OpWrite"/> or <see cref="OpWriteAlt"/>, upper bits clear).</summary>
+    public static bool IsWrite(ulong data)
+    {
+        var (_, _, operation) = Decode(data);
+        return (operation == OpWrite || operation == OpWriteAlt) && (data >> 48) == 0;
     }
 
     /// <summary>Splits a Data argument back into its fields.</summary>
@@ -70,6 +82,22 @@ public static class UniwillEc
         value = (byte)(result & 0xFF);
         return result != EcError;
     }
+
+    /// <summary>Bits of register 0x0751 that select the performance mode (bit4 TBME plus the power-save signature).</summary>
+    public const byte PerformanceModeMask = 0xB0;
+
+    /// <summary>
+    /// Encodes a performance-mode write for register 0x0751. Canonical values: 0xA0 power save, 0x10 overboost,
+    /// 0x00 enthusiast. Bits outside the mode mask (e.g. bit7 UFME user fan mode) are preserved from
+    /// <paramref name="currentRaw"/> so an unrelated firmware setting is not clobbered.
+    /// </summary>
+    public static byte EncodePerformanceMode(byte currentRaw, OemPerformanceMode mode) => mode switch
+    {
+        OemPerformanceMode.PowerSave => (byte)((currentRaw & ~PerformanceModeMask) | 0xA0),
+        OemPerformanceMode.Overboost => (byte)((currentRaw & ~PerformanceModeMask) | 0x10),
+        OemPerformanceMode.Enthusiast => (byte)(currentRaw & ~PerformanceModeMask),
+        _ => throw new ArgumentOutOfRangeException(nameof(mode)),
+    };
 
     /// <summary>Decodes register 0x0751. 0xA0 power save, 0x00 enthusiast, 0x10 (bit4 TBME) overboost.</summary>
     public static OemPerformanceMode DecodePerformanceMode(byte raw)

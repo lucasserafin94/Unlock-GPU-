@@ -47,9 +47,66 @@
                 </StackPanel>
             </Border>
 
-            <Border Style="{StaticResource WarningBox}" Margin="0">
-                <TextBlock Text="{l:Tr ui.oem.writesLater}" TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextBrush}"/>
+            <!-- apply -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding HasState, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.oem.applyTitle}" Style="{StaticResource SectionTitle}"/>
+
+                    <ItemsControl ItemsSource="{Binding ModeOptions}" Margin="0,6,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <RadioButton GroupName="oemMode" Content="{Binding Label}" IsChecked="{Binding IsSelected}"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- cTGP -->
+                    <StackPanel Margin="0,12,0,0">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding CtgpOffsetText}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                            <CheckBox Content="{l:Tr ui.oem.applyCtgp}" IsChecked="{Binding CtgpEnabled}"/>
+                        </DockPanel>
+                        <Slider Minimum="0" Maximum="{Binding CtgpOffsetMax}" Value="{Binding CtgpOffsetW}"
+                                SmallChange="5" LargeChange="25" Margin="18,6,0,0"
+                                IsEnabled="{Binding CtgpEnabled}" AutomationProperties.Name="{l:Tr ui.oem.applyCtgp}"/>
+                    </StackPanel>
+
+                    <!-- dynamic boost -->
+                    <StackPanel Margin="0,12,0,0">
+                        <DockPanel>
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding DbOffsetText}" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                            <CheckBox Content="{l:Tr ui.oem.applyDb}" IsChecked="{Binding DbEnabled}"/>
+                        </DockPanel>
+                        <Slider Minimum="0" Maximum="{Binding DbOffsetMax}" Value="{Binding DbOffsetW}"
+                                SmallChange="1" LargeChange="5" Margin="18,6,0,0"
+                                IsEnabled="{Binding DbEnabled}" AutomationProperties.Name="{l:Tr ui.oem.applyDb}"/>
+                    </StackPanel>
+
+                    <Button Content="{l:Tr ui.oem.applyButton}" Command="{Binding ApplyCommand}" Style="{StaticResource AccentButton}"
+                            HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                    <TextBlock Text="{Binding ApplyStatusText}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ApplyIsWarning}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
             </Border>
+
+            <TextBlock Text="{l:Tr ui.oem.writesLater}" Style="{StaticResource Note}" Margin="2,0,2,4"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

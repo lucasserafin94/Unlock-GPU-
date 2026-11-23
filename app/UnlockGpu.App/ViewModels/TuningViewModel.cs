@@ -283,9 +283,10 @@ public sealed class TuningViewModel : TabViewModel
         ArgumentNullException.ThrowIfNull(context);
         if (context.Info != null && !Equals(context.Info, _info))
         {
-            bool first = _info == null;
+            // The power range can change at runtime (the vBIOS kit's hot restart lifts MaxLimitW): re-derive it from
+            // every new info; SetProperty only notifies when a value actually changes.
             _info = context.Info;
-            if (first) ApplyPowerRange();
+            ApplyPowerRange();
             OnPropertyChanged(nameof(PowerLimitsText));
         }
         if (context.Sample.Ok && !double.IsNaN(context.Sample.LimitW)

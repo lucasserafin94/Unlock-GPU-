@@ -2,7 +2,7 @@ namespace UnlockGpu.Core.Oem;
 
 /// <summary>
 /// Power settings that live in the laptop's embedded controller (EC), reached through the OEM's public WMI
-/// interface. This build is read-only: <see cref="Apply"/> always throws <see cref="NotSupportedException"/>.
+/// interface. Reads are op 0x0100; <see cref="Apply"/> writes only the registers whose value actually changes.
 /// </summary>
 public interface IOemPowerService
 {
@@ -17,7 +17,13 @@ public interface IOemPowerService
     /// <exception cref="InvalidOperationException">The OEM WMI interface is not available on this machine.</exception>
     OemPowerState ReadState(CancellationToken ct = default);
 
-    /// <summary>Reserved for a later, separately reviewed build. Always throws NotSupportedException("oem.writeDisabled").</summary>
+    /// <summary>
+    /// Applies the requested changes: reads the current state first, writes only the registers that differ
+    /// (mode 0x0751, cTGP/DB enable bits and offsets in 0x0743-0x0746), then verifies with a fresh read.
+    /// Null fields leave the corresponding setting unchanged; an explicit value equal to the current one writes nothing.
+    /// </summary>
+    /// <exception cref="UnauthorizedAccessException">The process is not elevated (WMI access denied).</exception>
+    /// <exception cref="InvalidOperationException">The OEM WMI interface is not available on this machine.</exception>
     OemApplyResult Apply(OemPowerRequest request);
 }
 
@@ -105,14 +111,18 @@ public sealed record OemPowerState
             : null;
 }
 
-/// <summary>Requested EC changes for a future build. Null = leave unchanged.</summary>
+/// <summary>Requested EC changes. Null = leave unchanged.</summary>
 public sealed record OemPowerRequest
 {
-    /// <summary>Performance mode to set.</summary>
+    /// <summary>Performance mode to set (0x0751).</summary>
     public OemPerformanceMode? PerformanceMode { get; init; }
-    /// <summary>cTGP offset in W.</summary>
+    /// <summary>cTGP enable bit (0x0743 bit2). Null = leave unchanged.</summary>
+    public bool? CtgpEnabled { get; init; }
+    /// <summary>cTGP offset in W above base TGP (0x0744, 0-160 accepted).</summary>
     public int? CtgpOffsetW { get; init; }
-    /// <summary>Dynamic Boost offset in W.</summary>
+    /// <summary>Dynamic Boost enable bit (0x0743 bit1). Null = leave unchanged.</summary>
+    public bool? DynamicBoostEnabled { get; init; }
+    /// <summary>Dynamic Boost offset in W (0x0746, 0-25 accepted: firmware maximum).</summary>
     public int? DynamicBoostOffsetW { get; init; }
 }
 

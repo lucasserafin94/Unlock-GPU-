@@ -205,7 +205,7 @@
   "ui.oem.withBoost": "({w} W with Dynamic Boost)",
   "ui.oem.baseTgp": "· base TGP {w} W",
   "ui.oem.pl4Doubled": "(register value doubled)",
-  "ui.oem.writesLater": "Read-only for now. Changing these firmware values will come in a later version, after more testing.",
+  "ui.oem.writesLater": "These values live in the embedded controller's memory and may reset after a full power cycle; apply them again if they revert.",
   "ui.settings.language": "Language",
   "ui.settings.languageNote": "Changes immediately, no restart needed.",
   "ui.settings.accent": "Accent colour",

@@ -41,12 +41,12 @@ public sealed class WmiUniwillEcChannel : IUniwillEcChannel
     }
 
     /// <inheritdoc />
-    /// <exception cref="NotSupportedException">The data is not an EC read: EC writes are disabled in this build.</exception>
+    /// <exception cref="NotSupportedException">The data is neither a well-formed EC read nor an EC write.</exception>
     public uint Invoke(ulong data)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        // Last line of defence: only reads (op 0x0100) ever reach the firmware; anything else would write EC RAM.
-        if (!UniwillEc.IsRead(data))
+        // Last line of defence: only well-formed reads (op 0x0100) and writes (op 0x0000/0x0001) reach the firmware.
+        if (!UniwillEc.IsRead(data) && !UniwillEc.IsWrite(data))
             throw new NotSupportedException("oem.writeDisabled");
         dynamic instance = EnsureOpen();
         dynamic? methods = null, method = null, inDef = null, inParams = null, props = null, dataProp = null, outParams = null;

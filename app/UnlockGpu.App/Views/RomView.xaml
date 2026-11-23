@@ -1,0 +1,84 @@
+<UserControl x:Class="UnlockGpu.App.Views.RomView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:UnlockGpu.App.Localization">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12,10,12,4">
+            <!-- device -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="{l:Tr ui.oem.refresh}" Command="{Binding RefreshCommand}"/>
+                        <TextBlock Text="{l:Tr rom.title}" Style="{StaticResource SectionTitle}"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding PnpId}" Style="{StaticResource Caption}" Visibility="{Binding PnpId, Converter={StaticResource TextToVis}}"/>
+                    <TextBlock Text="{l:Tr rom.desc}" Style="{StaticResource Note}"/>
+                    <TextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <!-- slots currently in the driver key -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr rom.slotsTitle}" Style="{StaticResource SectionTitle}"/>
+                    <ItemsControl ItemsSource="{Binding Slots}" Margin="0,6,0,0">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,5" Margin="0,3">
+                                    <StackPanel>
+                                        <DockPanel>
+                                            <TextBlock DockPanel.Dock="Right" Text="{Binding SizeText}" Style="{StaticResource Caption}"/>
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" FontSize="12"/>
+                                        </DockPanel>
+                                        <TextBlock Text="{Binding Hex}" FontFamily="Consolas" FontSize="11.5" Foreground="{StaticResource TextDimBrush}"
+                                                   TextWrapping="Wrap" Margin="0,3,0,0"/>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{l:Tr rom.noSlots}" Style="{StaticResource Note}" Visibility="{Binding NoSlots, Converter={StaticResource BoolToVis}}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- apply a capture / revert -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr rom.stageTitle}" Style="{StaticResource SectionTitle}"/>
+
+                    <TextBlock Text="{l:Tr rom.captureFile}" Style="{StaticResource Caption}" Margin="0,8,0,2"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Text="{Binding CaptureFile, UpdateSourceTrigger=PropertyChanged}" VerticalContentAlignment="Center" Padding="6,3"/>
+                        <Button Grid.Column="1" Style="{StaticResource LinkButton}" Content="{l:Tr rom.browse}" Command="{Binding BrowseCommand}" Margin="8,0,0,0"/>
+                    </Grid>
+
+                    <TextBlock Text="{l:Tr rom.expectedMax}" Style="{StaticResource Caption}" Margin="0,12,0,2"/>
+                    <TextBox Text="{Binding ExpectedMaxText, UpdateSourceTrigger=PropertyChanged}" Width="90" HorizontalAlignment="Left"
+                             VerticalContentAlignment="Center" Padding="6,3"/>
+
+                    <Button Content="{l:Tr rom.stageButton}" Command="{Binding StageCommand}" Style="{StaticResource AccentButton}"
+                            HorizontalAlignment="Left" Margin="0,14,0,0"/>
+                    <Button Content="{l:Tr rom.clearButton}" Command="{Binding ClearCommand}"
+                            HorizontalAlignment="Left" Margin="0,8,0,0"/>
+
+                    <TextBlock Text="{l:Tr rom.restartHint}" Style="{StaticResource Note}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

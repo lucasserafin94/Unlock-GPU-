@@ -9,7 +9,8 @@
     <ApplicationIcon>..\..\assets\UnlockGPU.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- WFO0003: DPI awareness is declared in app.manifest on purpose; this is a WPF app and WinForms is used only for NotifyIcon. -->
-    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+    <!-- CA1822: VMs expose static firmware constants (CtgpOffsetMax/DbOffsetMax) as instance properties so XAML binds them via DataContext. -->
+    <NoWarn>$(NoWarn);WFO0003;CA1822</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <!-- Keep WPF types unambiguous: WinForms/Drawing are referenced explicitly where needed (TrayIcon). -->

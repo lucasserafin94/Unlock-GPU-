@@ -205,7 +205,7 @@
   "ui.oem.withBoost": "({w} W com Dynamic Boost)",
   "ui.oem.baseTgp": "· TGP base {w} W",
   "ui.oem.pl4Doubled": "(valor do registrador dobrado)",
-  "ui.oem.writesLater": "Por enquanto só leitura. A alteração destes valores do firmware virá numa versão futura, depois de mais testes.",
+  "ui.oem.writesLater": "Esses valores ficam na memória do controlador embutido e podem resetar após um desligamento total; aplique de novo se voltarem.",
   "ui.settings.language": "Idioma",
   "ui.settings.languageNote": "Muda na hora, sem reiniciar.",
   "ui.settings.accent": "Cor de destaque",
