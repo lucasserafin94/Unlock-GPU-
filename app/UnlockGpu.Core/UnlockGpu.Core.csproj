@@ -4,6 +4,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Kit romOverride (patch de registro do driver para passar do teto da vBIOS): fora do escopo do Unlock GPU, nunca compilado nem distribuido. -->
+    <Compile Remove="Patch\**" />
+    <None Remove="Patch\**" />
     <EmbeddedResource Include="i18n\*.json" LogicalName="i18n.%(Filename).json" />
   </ItemGroup>
 </Project>

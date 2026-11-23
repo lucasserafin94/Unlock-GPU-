@@ -96,23 +96,41 @@ public sealed partial class KeyCoverageTests
     }
 
     [Test]
-    public void EnglishAndPortuguese_HaveSameKeysAndPlaceholders()
+    public void AllLanguages_HaveSameKeysAndPlaceholders()
     {
         var en = Table("en");
-        var pt = Table("pt");
         var problems = new List<string>();
-        problems.AddRange(en.Keys.Except(pt.Keys, StringComparer.Ordinal).Select(k => "missing in pt: " + k));
-        problems.AddRange(pt.Keys.Except(en.Keys, StringComparer.Ordinal).Select(k => "missing in en: " + k));
+        foreach (var (code, _) in Localizer.Languages)
+            if (code != "en") Compare(en, code, problems);
+        if (problems.Count > 0)
+            throw new AssertionException(problems.Count + " problem(s):\n    " + string.Join("\n    ", problems.Order(StringComparer.Ordinal)));
+    }
+
+    [Test]
+    public void EveryLanguage_LoadsFromEmbeddedResource()
+    {
+        var loc = new Localizer("en");
+        foreach (var (code, _) in Localizer.Languages)
+        {
+            loc.SetLanguage(code);
+            foreach (var (key, text) in Table(code))
+                Check.Equal(text, loc.T(key));
+        }
+    }
+
+    static void Compare(Dictionary<string, string> en, string code, List<string> problems)
+    {
+        var pt = Table(code);
+        problems.AddRange(en.Keys.Except(pt.Keys, StringComparer.Ordinal).Select(k => $"missing in {code}: " + k));
+        problems.AddRange(pt.Keys.Except(en.Keys, StringComparer.Ordinal).Select(k => $"extra in {code}: " + k));
         foreach (var (key, enText) in en)
         {
             if (!pt.TryGetValue(key, out var ptText)) continue;
-            if (string.IsNullOrWhiteSpace(enText) || string.IsNullOrWhiteSpace(ptText)) problems.Add("empty text: " + key);
+            if (string.IsNullOrWhiteSpace(enText) || string.IsNullOrWhiteSpace(ptText)) problems.Add($"empty text ({code}): " + key);
             var a = Placeholders(enText);
             var b = Placeholders(ptText);
-            if (!a.SetEquals(b)) problems.Add($"placeholders differ: {key} en={{{string.Join(",", a)}}} pt={{{string.Join(",", b)}}}");
+            if (!a.SetEquals(b)) problems.Add($"placeholders differ: {key} en={{{string.Join(",", a)}}} {code}={{{string.Join(",", b)}}}");
         }
-        if (problems.Count > 0)
-            throw new AssertionException(problems.Count + " problem(s):\n    " + string.Join("\n    ", problems.Order(StringComparer.Ordinal)));
     }
 
     [Test]

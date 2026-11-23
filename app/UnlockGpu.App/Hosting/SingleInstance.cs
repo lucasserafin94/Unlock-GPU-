@@ -18,12 +18,34 @@ public sealed class SingleInstance : IDisposable
     {
         _mutex = mutex;
         _activate = activate;
-        _wait = ThreadPool.RegisterWaitForSingleObject(_activate, (_, _) => ActivationRequested?.Invoke(this, EventArgs.Empty),
-            null, Timeout.Infinite, executeOnlyOnce: false);
+        _wait = ThreadPool.RegisterWaitForSingleObject(_activate, (_, _) => Raise(), null, Timeout.Infinite, executeOnlyOnce: false);
     }
 
-    /// <summary>Raised on a thread-pool thread when another launch asks this instance to show itself.</summary>
-    public event EventHandler? ActivationRequested;
+    readonly Lock _sync = new();
+    EventHandler? _handlers;
+    bool _pending;
+
+    /// <summary>
+    /// Raised on a thread-pool thread when another launch asks this instance to show itself. A request that arrives
+    /// before anyone subscribes (window still loading) is kept and delivered to the first subscriber.
+    /// </summary>
+    public event EventHandler? ActivationRequested
+    {
+        add
+        {
+            bool deliver;
+            lock (_sync) { _handlers += value; deliver = _pending; _pending = false; }
+            if (deliver) value?.Invoke(this, EventArgs.Empty);
+        }
+        remove { lock (_sync) _handlers -= value; }
+    }
+
+    void Raise()
+    {
+        EventHandler? h;
+        lock (_sync) { h = _handlers; if (h is null) _pending = true; }
+        h?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>
     /// Returns the instance guard when this is the first instance; otherwise signals the first one and returns null.

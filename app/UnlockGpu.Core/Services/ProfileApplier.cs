@@ -58,16 +58,20 @@ public sealed class ProfileApplier : IProfileApplier
         var core = _offsets.Get(ClockDomain.Core);
         var mem = _offsets.Get(ClockDomain.Memory);
         var sample = _gpu.Sample();
+        // Sem trava ativa o perfil nao guarda nada para a VRAM (null = nao mexer): aplicar o perfil depois nao
+        // deve resetar o clock de memoria nem desfazer uma trava feita por outra ferramenta.
         uint? lockMHz = null;
         if (sample.Ok)
         {
             var st = _vram.Evaluate(sample);
-            lockMHz = st.Locked ? st.LevelMHz : 0;
+            if (st.Locked) lockMHz = st.LevelMHz;
         }
         double? limit = null;
         if (_power.Support == PowerSupport.Adjustable)
         {
-            double w = _gpu.EnforcedLimitW();
+            // O limite configurado, nao o aplicado: o aplicado pode estar temporariamente mais baixo (termico,
+            // bateria) e salvar esse valor baixaria o limite ao reaplicar o perfil.
+            double w = _gpu.ConfiguredLimitW();
             if (!double.IsNaN(w)) limit = Math.Round(w, 1);
         }
         return new Profile

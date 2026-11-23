@@ -95,7 +95,10 @@ public sealed class PowerService : IPowerService
         lock (_gate)
         {
             int rc = _gpu.SetPowerLimitW(watts);
-            double back = _gpu.EnforcedLimitW();
+            // Le de volta o limite configurado (o que foi gravado); o aplicado pode estar mais baixo por um corte
+            // temporario e daria falso erro de leitura.
+            double back = _gpu.ConfiguredLimitW();
+            if (double.IsNaN(back)) back = _gpu.EnforcedLimitW();
             string readBack = double.IsNaN(back) ? "?" : string.Create(CultureInfo.InvariantCulture, $"{back:0.#} W");
             if (rc == NvmlNotSupported) Remember(PowerSupport.NotSupported, info.Driver, save: true);
             if (rc != NvmlSuccess)

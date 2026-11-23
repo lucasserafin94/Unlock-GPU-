@@ -158,7 +158,7 @@ public sealed class ProfileApplierTests : TempDirTest
         var cap = applier.Capture("now");
         Check.Equal(120, cap.CoreOffsetMHz);
         Check.Equal(2000, cap.MemOffsetMHz);
-        Check.Equal(0u, cap.VramLockMHz);
+        Check.Equal((uint?)null, cap.VramLockMHz);   // no lock active -> profile leaves the VRAM clock alone
         Check.Equal(175.0, cap.PowerLimitW);
 
         var reset = applier.ResetToDefaults();

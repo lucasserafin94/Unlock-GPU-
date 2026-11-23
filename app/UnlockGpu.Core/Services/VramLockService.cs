@@ -31,6 +31,7 @@ public sealed class VramLockService : IVramLockService
     int _idleLockedSeen;
     Detection? _lastDetected;
     DateTimeOffset? _lockedAt;
+    readonly WriteGate? _writeGate;
 
     /// <summary>Creates the service.</summary>
     /// <param name="gpu">GPU access.</param>
@@ -38,8 +39,7 @@ public sealed class VramLockService : IVramLockService
     /// <param name="log">Log.</param>
     /// <param name="time">Clock for the grace period (tests); defaults to the system clock.</param>
     /// <param name="bootTimeUtc">Boot identity (tests); defaults to <see cref="BootClock.BootTimeUtc"/>.</param>
-    readonly WriteGate? _writeGate;
-
+    /// <param name="gate">Refuses writes while the auto-tuner runs (optional).</param>
     public VramLockService(IGpu gpu, AppPaths paths, ILog log, TimeProvider? time = null, Func<DateTime>? bootTimeUtc = null, WriteGate? gate = null)
     {
         _writeGate = gate;
@@ -60,8 +60,8 @@ public sealed class VramLockService : IVramLockService
     /// <inheritdoc/>
     public ApplyResult Lock(uint levelMHz)
     {
-        if (_writeGate?.IsBlocked == true) return ApplyError.Fail(levelMHz.ToString(System.Globalization.CultureInfo.InvariantCulture) + " MHz", ServiceTextKeys.TunerBusy);
         string requested = Mhz(levelMHz);
+        if (_writeGate?.IsBlocked == true) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
         var levels = Levels;
         if (levels.Count == 0) return ApplyError.Fail(requested, ServiceTextKeys.VramNoLevels, _gpu.LastError);
         if (!levels.Contains(levelMHz))

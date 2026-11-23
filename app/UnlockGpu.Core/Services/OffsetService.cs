@@ -15,10 +15,10 @@ public sealed class OffsetService : IOffsetService
     readonly ILog _log;
     readonly OffsetTracker? _tracker;
     readonly Lock _gate = new();
-
-    /// <summary>Creates the service. <paramref name="tracker"/> (optional) receives the read-back values.</summary>
     readonly WriteGate? _writeGate;
 
+    /// <summary>Creates the service. <paramref name="tracker"/> (optional) receives the read-back values;
+    /// <paramref name="gate"/> (optional) refuses writes while the auto-tuner runs.</summary>
     public OffsetService(IGpu gpu, ILog log, OffsetTracker? tracker = null, WriteGate? gate = null)
     {
         _writeGate = gate;

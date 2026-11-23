@@ -20,3 +20,5 @@ src/NvApiPrivate.cs
 src/RailCurrents.cs
 src/RomSlot.cs
 tools/capture-romoverride.ps1
+dist/
+app/UnlockGpu.Core/Patch/

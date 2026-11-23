@@ -94,8 +94,12 @@ public sealed class TrayIcon : IDisposable
 
     async Task RunAsync(Func<Task> action)
     {
+        // Chamado de um handler async void do menu: qualquer excecao que escape derruba o app inteiro,
+        // entao tudo vira um aviso na bandeja.
         try { await action().ConfigureAwait(true); }
-        catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
+#pragma warning disable CA1031
+        catch (Exception ex)
+#pragma warning restore CA1031
         {
             Notify(ex.Message, BannerKind.Error);
         }
