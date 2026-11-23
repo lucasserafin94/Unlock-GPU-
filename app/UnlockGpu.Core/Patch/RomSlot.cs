@@ -218,6 +218,83 @@ namespace UnlockGpu.Patch
             return true;
         }
 
+        // ------------------- extração / reconstrução por slot --------------
+
+        // Blob de slot já parseado: cabeçalho, offset shadow e payload.
+        public struct RomSlotBlob
+        {
+            public byte[] Header;       // 5 bytes (wildcard zerado ou id exato da vBIOS)
+            public int ShadowOffset;    // offset semântico dentro da imagem da vBIOS
+            public int Width;           // largura do payload em bytes (4 = um int32, 8 = par duplicado)
+            public byte[] Payload;      // bytes crus do payload
+
+            public RomSlotBlob(byte[] header, int shadowOffset, int width, byte[] payload)
+            {
+                Header = header;
+                ShadowOffset = shadowOffset;
+                Width = width;
+                Payload = payload;
+            }
+        }
+
+        // Faz o parse de um blob de slot (canônico 14B ou sized 10+N). Aceita tanto o cabeçalho wildcard zerado quanto o id exato da vBIOS.
+        public static bool TryParseBlob(byte[] data, out RomSlotBlob blob)
+        {
+            blob = new RomSlotBlob();
+            if (data == null || data.Length < 10)
+            {
+                return false;
+            }
+            int width = data[9];
+            int shadow = BitConverter.ToInt32(data, 5);
+            if (shadow <= 0 || width <= 0 || width > 16 || data.Length != 10 + width)
+            {
+                return false;
+            }
+            byte[] header = new byte[5];
+            Buffer.BlockCopy(data, 0, header, 0, 5);
+            byte[] payload = new byte[width];
+            Buffer.BlockCopy(data, 10, payload, 0, width);
+            blob = new RomSlotBlob(header, shadow, width, payload);
+            return true;
+        }
+
+        // Primeiro int32 LE do payload — o valor gravado no offset shadow (mW para slots de potência, mA para correntes).
+        public static long? BlobValue(RomSlotBlob blob)
+        {
+            if (blob.Width < 4 || blob.Payload == null)
+            {
+                return null;
+            }
+            return BitConverter.ToInt32(blob.Payload, 0);
+        }
+
+        // Reconstrói o blob com um novo valor bruto. Largura 4 grava um int32 LE; largura 8 grava o valor duas vezes
+        // (a placa mantém um campo duplicado adjacente em sincronia). Cabeçalho e offset shadow são preservados.
+        public static bool BuildValueBlob(RomSlotBlob original, long newValue, out byte[] blob)
+        {
+            blob = null;
+            if (original.Width != 4 && original.Width != 8)
+            {
+                return false;
+            }
+            if (newValue < int.MinValue || newValue > int.MaxValue)
+            {
+                return false;
+            }
+            byte[] value = BitConverter.GetBytes((int)newValue);
+            blob = new byte[10 + original.Width];
+            Buffer.BlockCopy(original.Header, 0, blob, 0, 5);
+            Buffer.BlockCopy(BitConverter.GetBytes(original.ShadowOffset), 0, blob, 5, 4);
+            blob[9] = (byte)original.Width;
+            Buffer.BlockCopy(value, 0, blob, 10, 4);
+            if (original.Width == 8)
+            {
+                Buffer.BlockCopy(value, 0, blob, 14, 4);
+            }
+            return true;
+        }
+
         // ------------------------- inventário de slots ----------------------
 
         // Lê todos os romOverrideXX. Entradas não-BINARY ficam null (contam para o prefixo denso).

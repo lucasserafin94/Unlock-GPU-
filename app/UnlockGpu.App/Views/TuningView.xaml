@@ -7,6 +7,10 @@
         <StackPanel Margin="12,10,12,4">
             <v:BannerView DataContext="{Binding ReadBack}"/>
 
+            <!-- live applied → read-back confirmations -->
+            <TextBlock Text="{Binding LiveLine}" Foreground="{DynamicResource AccentBrush}" FontSize="12" FontWeight="SemiBold"
+                       Margin="0,8,0,0" TextWrapping="Wrap" Visibility="{Binding HasLiveLine, Converter={StaticResource BoolToVis}}"/>
+
             <!-- clock offsets -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>
@@ -100,6 +104,68 @@
                 </StackPanel>
             </Border>
 
+            <!-- persistent power ceiling (driver shadow slots) -->
+            <Border Style="{StaticResource Card}" Visibility="{Binding HasRomRoles, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.rom.title}" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="{l:Tr ui.rom.desc}" Style="{StaticResource Note}"/>
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="84"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Text="{l:Tr ui.rom.max}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Minimum="5" Maximum="400" Value="{Binding MaxValue}" SmallChange="5" LargeChange="25"
+                                IsEnabled="{Binding MaxEnabled}" AutomationProperties.Name="{l:Tr ui.rom.max}"/>
+                        <TextBlock Grid.Column="2" Text="{Binding MaxValueText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+
+                        <StackPanel Grid.Row="1" Orientation="Horizontal">
+                            <TextBlock Text="{l:Tr ui.rom.base}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <CheckBox Content="{l:Tr ui.rom.sync}" IsChecked="{Binding SyncBase}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <Slider Grid.Row="1" Grid.Column="1" Minimum="5" Maximum="400" Value="{Binding BaseValue}" SmallChange="5" LargeChange="25"
+                                IsEnabled="{Binding BaseEnabled}" AutomationProperties.Name="{l:Tr ui.rom.base}"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding BaseValueText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Row="2" Text="{l:Tr ui.rom.nvvdd}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="30" Value="{Binding NvvddA}" SmallChange="0.5" LargeChange="2"
+                                IsEnabled="{Binding NvvddEnabled}" AutomationProperties.Name="{l:Tr ui.rom.nvvdd}"/>
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding NvvddAText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Row="3" Text="{l:Tr ui.rom.msvdd}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="30" Value="{Binding MsvddA}" SmallChange="0.5" LargeChange="2"
+                                IsEnabled="{Binding MsvddEnabled}" AutomationProperties.Name="{l:Tr ui.rom.msvdd}"/>
+                        <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding MsvddAText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+
+                        <TextBlock Grid.Row="4" Text="{l:Tr ui.rom.boardInput}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="4" Grid.Column="1" Minimum="1" Maximum="240" Value="{Binding BoardInputA}" SmallChange="1" LargeChange="10"
+                                IsEnabled="{Binding BoardInputEnabled}" AutomationProperties.Name="{l:Tr ui.rom.boardInput}"/>
+                        <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding BoardInputAText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+                    <DockPanel Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <Button Content="{l:Tr ui.rom.apply}" Command="{Binding ApplyPersistentCommand}" Style="{StaticResource AccentButton}"/>
+                        </StackPanel>
+                        <TextBlock Text="{l:Tr ui.rom.dirty}" Foreground="{StaticResource WarnBrush}" FontSize="11.5" VerticalAlignment="Center"
+                                   Visibility="{Binding IsRomDirty, Converter={StaticResource BoolToVis}}"/>
+                    </DockPanel>
+                </StackPanel>
+            </Border>
+
             <!-- budget -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>
@@ -108,6 +174,10 @@
                         <TextBlock Text="{l:Tr ui.budget.adapter}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                         <TextBox Width="64" Margin="8,0,4,0" Text="{Binding AdapterWattsText, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="{l:Tr ui.budget.adapter}"/>
+                        <TextBlock Text="W" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                        <TextBlock Text="{l:Tr ui.budget.reserve}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="16,0,0,0"/>
+                        <TextBox Width="56" Margin="8,0,4,0" Text="{Binding ReserveWattsText, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="{l:Tr ui.budget.reserve}"/>
                         <TextBlock Text="W" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding BudgetText}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0">

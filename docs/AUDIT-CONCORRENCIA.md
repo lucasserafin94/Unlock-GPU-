@@ -32,20 +32,20 @@ A captura em [`config/romoverride-capture.txt`](../config/romoverride-capture.tx
 |---|---|---|
 | Monitor ao vivo de potência (W) | ✅ | `MonitorViewModel` + gráfico 3 min + sessão CSV por segundo |
 | Limite de potência em slider na faixa do driver | ✅ | `PowerService` via NVML, com verificação "aplicado → lido de volta" |
-| Teto MAX/Base **além da vBIOS** (romOverride) | ✅ **kit Patch** | `RomOverrideService`: stage da captura → hot restart; o `MaxLimitW` da NVML cresce sozinho e o slider do Claude expande sem mudar nada no código dele |
-| Correntes OCP NVVDD/MSVDD (ler + gravar) | ✅ leitura / ✅ gravação via slots 02/03 | Leitura: `RailCurrents.cs` (Type19, chamada interna do driver); gravação: os próprios blobs da captura |
+| Teto MAX/Base **além da vBIOS** (romOverride) | ✅ **kit Patch + sliders dedicados (v4.2)** | Aba Tuning → "Persistent power ceiling": slider NVIDIA MAX (5–400 W, passo 5) grava o slot 00; Base Limit com checkbox ⇄ Sync grava o slot 01 (sync = base acompanha o max, delta de fábrica); botão único *Stage & restart* aplica tudo sujo + 1 hot restart + verificação byte-a-byte | 
+| Correntes OCP NVVDD/MSVDD + Board Input (ler + gravar) | ✅ leitura / ✅ gravação via slots 02/03/04 (v4.2) | Leitura: `RailCurrents.cs` (Type19, chamada interna do driver); gravação: sliders NVVDD/MSVDD (1–30 A, passo 0,5) e Board Input (1–240 A) na mesma card persistente; valores exatos da captura (ex.: 15,001 A) preservados sem snap |
 | Offsets de clock do núcleo e memória | ✅ | `OffsetService` (NVML) + trava VRAM P0/P2 — e o auto-tuner com bench D3D11 mede a pontuação a cada passo, **melhor** que o concorrente |
 | Perfis / planos (planner de 7 domínios) | ✅ perfis / ⏳ planner por domínio | `ProfileStore` + applier + startup + backup ZIP; o "plan" por domínio é v2 |
 | Monitor: temperatura, motivo do corte | ✅ | NVML: temperatura, P-state, throttle reasons traduzidos |
 | Monitor: hotspot, voltagem, fan PWM | ⏳ parcial / v2 | Fan/energia da plataforma: aba Uniwill EC (somente leitura); voltagem e hotspot = chamadas internas do driver (v2) |
-| PCF platform controller / contrato Lenovo | ⏳ v2 | controlador de energia da plataforma; hoje a aba OEM é somente leitura |
+| PCF platform controller / contrato Lenovo | ✅ informativo (v4.2) / ⏳ escrita direta = v2 | Card de orçamento: entrada de reserva de plataforma (padrão 30 W) + texto "GPU até {max} W + reserva {reserve} W = total {total} W" + alerta quando o total passa do teto de planejamento (carregador − 30 W); a escrita real na plataforma continua na aba OEM Uniwill EC |
 | Offsets SYS/Video/XBAR + "estender faixa de memória até 6000 MHz" | ⏳ v2 | via QI privado do NVAPI — stub `NvApiPrivate.cs` já está no kit |
 | Voltage demand domains | ⏳ v2 | domínio de demanda de voltagem (chamada interna) |
 | Override completo da BIOS via nvflash (imagem inteira) | ⏳ v2 | o concorrente grava a imagem toda; a gente faz só os slots romOverride (mais cirúrgico, mas menos alcance) |
 | Ownership journal + baseline imutável | ⏳ v2 | "quem mudou o quê e quando" + snapshot de fábrica; hoje o arquivo de captura é a versão manual do baseline |
 | Exportação de diagnósticos | ✅ | CSV de sessão para Excel (`;` / vírgula decimal) + backup ZIP export/import |
 
-**Resumo:** tudo que o concorrente faz no dia a dia (potência, teto além da vBIOS, correntes dos rails, offsets, perfis, monitor, exportação) já está coberto. O que falta é o "segundo andar": planner por domínio, journal de propriedade, voltagem/hotspot/fan via chamadas internas, PCF e nvflash completo — tudo listado como v2 abaixo.
+**Resumo (v4.2):** tudo que o concorrente faz no dia a dia (potência runtime + teto MAX/Base além da vBIOS com sliders próprios, correntes dos rails NVVDD/MSVDD/Board Input, offsets, perfis, monitor, orçamento de plataforma, exportação) já está coberto — inclusive a faixa 5–400 W do slider dele. O que falta é o "segundo andar": planner por domínio, journal de propriedade, voltagem/hotspot/fan via chamadas internas, escrita direta no PCF e nvflash completo — tudo listado como v2 abaixo.
 
 ## 3. O que o kit Patch preenche (`app/UnlockGpu.Core/Patch`, namespace `UnlockGpu.Patch`)
 
@@ -85,13 +85,15 @@ O Claude tinha se limitado sozinho em três lugares:
 3. Após o restart, a NVML reporta `MaxLimitW = 250 W`; o slider de potência do app passa a aceitar até 250 W **automaticamente** (sem ele, a faixa era 5–175 W).
 4. Para voltar ao teto de fábrica: `ClearAll(pnpId)` + hot restart → volta para 175 W.
 
-## 7. Status final da noite (23/11)
+## 7. Status final da noite (23/11) — v4.2.0
 
-- **Tudo espelhado no GitHub**: [`github.com/lucasserafin94/Unlock-GPU-`](https://github.com/lucasserafin94/Unlock-GPU-) — o repositório público agora é idêntico ao local (mesmo commit, árvore verificada). O Claude e eu trabalhamos sobre o mesmo repositório; qualquer um dos dois pode dar `git pull`/`push`.
-- **Build limpo**: 0 erros / 0 warnings; **testes 96/96 passando**.
-- **Kit romOverride integrado de verdade no Core** (antes era código morto, excluído da compilação) + `RomOverrideService` pronto para uso — fluxo completo na seção 6.
+- **Paridade funcional completa com o NvpwrControl no dia a dia** (v4.2): card "Persistent power ceiling" na aba Tuning com NVIDIA MAX + Base Limit (⇄ Sync) + correntes NVVDD/MSVDD/Board Input, aplicação única *Stage & restart* com verificação byte-a-byte; faixa 5–400 W igual à dele.
+- **Faixa de telemetria ao vivo** (`LiveLine`): confirmação aplicada→lido por controle (runtime e persistente), com detecção de drift do limite em cada amostra.
+- **Card de orçamento PCF**: reserva de plataforma + total calculado + alerta acima do teto de planejamento (carregador − 30 W).
+- **Tudo espelhado no GitHub**: [`github.com/lucasserafin94/Unlock-GPU-`](https://github.com/lucasserafin94/Unlock-GPU-) — release **"Unlock GPU 4.2"** com tag `v4.2.0`, exe self-contained + instalador Inno como assets.
+- **Build limpo**: 0 erros / 0 warnings; **testes 101/101 passando** (5 novos: round-trip de blobs width-4 e width-8, rejeição de layout, resolução de papéis dos slots).
+- **Kit romOverride integrado de verdade no Core** + `RomOverrideService` com `SetSlotValue` (escrita cirúrgica por slot) — fluxo completo na seção 6.
 - **8 idiomas** no app; textos do README e dos contratos alinhados com a exceção documentada do kit.
-- **Issues-probe da noite removidas** — o repositório está limpo para uso normal (issues/PRs livres).
-- **Próximo passo (manhã)**: `git pull` na sua pasta (ou clonar de novo) e você já tem tudo; o Claude segue com o reforço de código/design por cima dessa base.
+- **Próximo passo**: baixar o release 4.2, rodar como admin e testar os sliders persistentes na sua GPU (o driver já está com o teto de 250 W ativo).
 
 > ⚠️ Se o Claude reescrever o README ou os textos de escopo, a exceção do kit Patch precisa ser mantida (seção 5, item 3) — senão o app volta a se auto-limitar na documentação.

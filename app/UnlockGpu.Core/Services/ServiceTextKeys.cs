@@ -83,4 +83,10 @@ public static class ServiceTextKeys
     public const string RomRestartFailed = "svc.rom.error.restartFailed";
     /// <summary>The live power ceiling after the restart differs from the staged value.</summary>
     public const string RomMaxMismatch = "svc.rom.error.maxMismatch";
+    /// <summary>The slot does not exist in the driver key.</summary>
+    public const string RomSlotMissing = "svc.rom.error.slotMissing";
+    /// <summary>The slot blob has a layout that cannot be value-edited (payload width other than 4 or 8).</summary>
+    public const string RomLayoutUnsupported = "svc.rom.error.layoutUnsupported";
+    /// <summary>The new raw value does not fit an int32.</summary>
+    public const string RomValueRange = "svc.rom.error.valueRange";
 }

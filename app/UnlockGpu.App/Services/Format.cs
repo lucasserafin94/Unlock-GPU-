@@ -24,6 +24,10 @@ public static class Format
     public static string OneDecimal(double v, CultureInfo culture) =>
         double.IsNaN(v) ? Unknown : v.ToString("#,0.0", culture);
 
+    /// <summary>Amperes without trailing zeros (15 A, 15.001 A), or a dash when unknown.</summary>
+    public static string Amperes(double a, CultureInfo culture) =>
+        double.IsNaN(a) ? Unknown : a.ToString("0.###", culture) + " A";
+
     /// <summary>Signed MHz offset (+150, 0, -45).</summary>
     public static string Offset(int v, CultureInfo culture) =>
         v > 0 ? "+" + v.ToString(culture) : v.ToString(culture);

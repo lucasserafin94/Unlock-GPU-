@@ -18,7 +18,27 @@ using UnlockGpu.Core.Services;
 namespace UnlockGpu.Patch;
 
 /// <summary>One romOverride slot as stored in the driver class key (hex, uppercase).</summary>
-public sealed record RomSlotInfo(int Index, int SizeBytes, string Hex);
+public sealed record RomSlotInfo(int Index, int SizeBytes, string Hex, int ShadowOffset, int PayloadWidth, long? RawValue);
+
+/// <summary>UI control → physical slot mapping for the persistent power card.</summary>
+public sealed record RomRoles(int? MaxSlot, int? BaseSlot, int? NvvddSlot, int? MsvddSlot, int? BoardInputSlot)
+{
+    /// <summary>At least one role resolved (the card can be shown).</summary>
+    public bool Any => MaxSlot is not null || BaseSlot is not null || NvvddSlot is not null || MsvddSlot is not null || BoardInputSlot is not null;
+}
+
+/// <summary>Known shadow offsets of the Tongfang/Uniwill RTX 50-series board (from the shipped capture).</summary>
+public static class RomRoleOffsets
+{
+    /// <summary>BOARD_MAX — whole-board power ceiling.</summary>
+    public const int Max = 0x57C36;
+    /// <summary>BOARD_BASE — base limit value.</summary>
+    public const int Base = 0x57C6A;
+    /// <summary>NVVDD rail OCP (mA).</summary>
+    public const int Nvvdd = 0x57F00;
+    /// <summary>MSVDD rail OCP (mA).</summary>
+    public const int Msvdd = 0x57EFC;
+}
 
 /// <summary>
 /// Persistent power-ceiling override. Writes <c>romOverrideXX</c> REG_BINARY values into the GPU's driver class
@@ -40,8 +60,11 @@ public interface IRomOverrideService
     /// <summary>Deletes romOverride00..15 (back to the factory vBIOS ceiling).</summary>
     ApplyResult ClearAll(string pnpInstanceId);
 
-    /// <summary>Hot-restarts the device and verifies NVML's max limit reached expectedMaxW.</summary>
-    Task<ApplyResult> HotRestartAsync(string pnpInstanceId, double? expectedMaxW, CancellationToken ct = default);
+    /// <summary>Replaces the raw value of an existing slot (mW for power slots, mA for current slots) and verifies byte-for-byte.</summary>
+    ApplyResult SetSlotValue(string pnpInstanceId, int slotIndex, long rawValue);
+
+    /// <summary>Hot-restarts the device and verifies NVML's max limit reached expectedMaxW. With force the restart runs even when the ceiling already matches (other slots may be pending).</summary>
+    Task<ApplyResult> HotRestartAsync(string pnpInstanceId, double? expectedMaxW, bool force = false, CancellationToken ct = default);
 }
 
 public sealed class RomOverrideService : IRomOverrideService
@@ -109,7 +132,13 @@ public sealed class RomOverrideService : IRomOverrideService
         using RegistryKey? key = RomSlot.OpenDeviceKey(pnpInstanceId, writable: false, out error);
         if (key == null) return list;
         foreach (var kv in RomSlot.ReadAllSlots(key, RomSlot.DefaultMaxSlot).OrderBy(kv => kv.Key))
-            list.Add(new RomSlotInfo(kv.Key, kv.Value?.Length ?? 0, ToHex(kv.Value)));
+        {
+            var data = kv.Value;
+            if (data != null && RomSlot.TryParseBlob(data, out var blob) && RomSlot.BlobValue(blob) is long raw)
+                list.Add(new RomSlotInfo(kv.Key, data.Length, ToHex(data), blob.ShadowOffset, blob.Width, raw));
+            else
+                list.Add(new RomSlotInfo(kv.Key, kv.Value?.Length ?? 0, ToHex(kv.Value), 0, 0, null));
+        }
         return list;
     }
 
@@ -172,6 +201,62 @@ public sealed class RomOverrideService : IRomOverrideService
     }
 
     /// <inheritdoc/>
+    public ApplyResult SetSlotValue(string pnpInstanceId, int slotIndex, long rawValue)
+    {
+        const string requested = "set slot value";
+        if (_gate?.IsBlocked == true) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
+        using RegistryKey? key = RomSlot.OpenDeviceKey(pnpInstanceId, writable: true, out string error);
+        if (key == null) return ApplyError.Fail(requested, ServiceTextKeys.RomKeyOpen, error);
+
+        byte[]? data;
+        try
+        {
+            data = key.GetValue(RomSlot.SlotName(slotIndex), null, RegistryValueOptions.DoNotExpandEnvironmentNames) as byte[];
+        }
+        catch (Exception ex)
+        {
+            return ApplyError.Fail(requested, ServiceTextKeys.RomKeyOpen, ex.Message);
+        }
+        if (data == null)
+            return ApplyError.Fail(requested, ServiceTextKeys.RomSlotMissing, RomSlot.SlotName(slotIndex));
+
+        if (!RomSlot.TryParseBlob(data, out var blob))
+            return ApplyError.Fail(requested, ServiceTextKeys.RomLayoutUnsupported, RomSlot.SlotName(slotIndex));
+        if (rawValue < 0 || rawValue > int.MaxValue)
+            return ApplyError.Fail(requested, ServiceTextKeys.RomValueRange, RomSlot.SlotName(slotIndex));
+
+        byte[]? newBlob;
+        if (!RomSlot.BuildValueBlob(blob, rawValue, out newBlob))
+            return ApplyError.Fail(requested, ServiceTextKeys.RomLayoutUnsupported, RomSlot.SlotName(slotIndex));
+
+        try
+        {
+            key.SetValue(RomSlot.SlotName(slotIndex), newBlob, RegistryValueKind.Binary);
+        }
+        catch (Exception ex)
+        {
+            _log.Error("ROM OVERRIDE: set slot value failed", ex);
+            return ApplyError.Fail(requested, ServiceTextKeys.RomKeyOpen, ex.Message);
+        }
+
+        byte[]? readBack;
+        try
+        {
+            readBack = key.GetValue(RomSlot.SlotName(slotIndex), null, RegistryValueOptions.DoNotExpandEnvironmentNames) as byte[];
+        }
+        catch (Exception ex)
+        {
+            return ApplyError.Fail(requested, ServiceTextKeys.RomKeyOpen, ex.Message);
+        }
+        if (!readBack.AsSpan().SequenceEqual(newBlob))
+            return ApplyError.Fail(requested, ServiceTextKeys.RomReadBackMismatch, RomSlot.SlotName(slotIndex));
+        try { key.Flush(); } catch { /* best effort */ }
+
+        _log.Info($"ROM OVERRIDE: {RomSlot.SlotName(slotIndex)} set to raw {rawValue} (shadow 0x{blob.ShadowOffset:X}, width {blob.Width}).");
+        return new ApplyResult(true, requested, RomSlot.SlotName(slotIndex) + " verified");
+    }
+
+    /// <inheritdoc/>
     public ApplyResult ClearAll(string pnpInstanceId)
     {
         const string requested = "clear all slots";
@@ -198,7 +283,7 @@ public sealed class RomOverrideService : IRomOverrideService
     }
 
     /// <inheritdoc/>
-    public async Task<ApplyResult> HotRestartAsync(string pnpInstanceId, double? expectedMaxW, CancellationToken ct = default)
+    public async Task<ApplyResult> HotRestartAsync(string pnpInstanceId, double? expectedMaxW, bool force = false, CancellationToken ct = default)
     {
         const string requested = "hot restart";
         if (_gate?.IsBlocked == true) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
@@ -207,7 +292,7 @@ public sealed class RomOverrideService : IRomOverrideService
         GpuHotRestart.WaitForIdle(UtilizationPct, 20_000, out _);
 
         double liveBefore = CurrentMaxW();
-        if (expectedMaxW.HasValue && !double.IsNaN(liveBefore) &&
+        if (!force && expectedMaxW.HasValue && !double.IsNaN(liveBefore) &&
             GpuHotRestart.ShouldSkipRestart(liveBefore, expectedMaxW.Value))
         {
             return new ApplyResult(true, requested, string.Create(CultureInfo.InvariantCulture, $"max already {liveBefore:0.##} W"));
@@ -260,6 +345,30 @@ public sealed class RomOverrideService : IRomOverrideService
     double CurrentMaxW()
     {
         try { var info = _gpu.Info; return info?.MaxLimitW ?? double.NaN; } catch { return double.NaN; }
+    }
+
+    /// <summary>
+    /// Maps the persistent power controls to physical slots. Known shadow offsets win (Tongfang/Uniwill 50-series);
+    /// when none match, falls back to the dense slot order these boards use (0=MAX, 1=BASE, 2/3=rail OCPs).
+    /// The board-input role is the first width-8 slot (the duplicated-pair layout).
+    /// </summary>
+    public static RomRoles ResolveRoles(IReadOnlyList<RomSlotInfo> slots)
+    {
+        int? ByOffset(int shadow) => slots.FirstOrDefault(s => s.ShadowOffset == shadow && s.RawValue.HasValue)?.Index;
+        int? max = ByOffset(RomRoleOffsets.Max);
+        int? base_ = ByOffset(RomRoleOffsets.Base);
+        int? nvvdd = ByOffset(RomRoleOffsets.Nvvdd);
+        int? msvdd = ByOffset(RomRoleOffsets.Msvdd);
+
+        if (max is null && base_ is null && nvvdd is null && msvdd is null)
+        {
+            max = SlotAt(0); base_ = SlotAt(1); nvvdd = SlotAt(2); msvdd = SlotAt(3);
+        }
+
+        int? boardInput = slots.FirstOrDefault(s => s.PayloadWidth == 8 && s.RawValue.HasValue)?.Index;
+        return new RomRoles(max, base_, nvvdd, msvdd, boardInput);
+
+        int? SlotAt(int index) => slots.FirstOrDefault(s => s.Index == index && s.PayloadWidth == 4 && s.RawValue.HasValue)?.Index;
     }
 
     static string ToHex(byte[]? data)

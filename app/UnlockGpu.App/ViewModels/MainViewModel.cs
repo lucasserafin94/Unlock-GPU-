@@ -49,7 +49,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _theme = theme;
 
         Monitor = new MonitorViewModel(localizer, services.Settings, services.Gpu);
-        Tuning = new TuningViewModel(localizer, services.Gpu, services.Offsets, services.Vram, services.Power, services.Settings, Banner);
+        Tuning = new TuningViewModel(localizer, services.Gpu, services.Offsets, services.Vram, services.Power,
+            services.RomOverride, services.Settings, Banner);
         AutoTune = new AutoTuneViewModel(localizer, services.Tuner, services.Offsets, services.Stability, Banner);
         Sessions = new SessionsViewModel(localizer, services.Recorder, dialogs, services.Paths, Banner);
         Profiles = new ProfilesViewModel(localizer, services.Profiles, services.Applier, services.Backup,

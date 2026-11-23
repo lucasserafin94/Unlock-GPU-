@@ -10,7 +10,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>4.1.0</Version>
+    <Version>4.2.0</Version>
     <Company>Unlock GPU</Company>
     <Product>Unlock GPU</Product>
     <Copyright>Unlock GPU</Copyright>
