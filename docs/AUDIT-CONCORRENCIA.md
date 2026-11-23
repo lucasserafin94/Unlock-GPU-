@@ -84,3 +84,14 @@ O Claude tinha se limitado sozinho em três lugares:
 2. `FindGpuPnpId()` → `StageCaptured("config/romoverride-capture.txt")` → `HotRestartAsync(pnpId, expectedMaxW: 250)`.
 3. Após o restart, a NVML reporta `MaxLimitW = 250 W`; o slider de potência do app passa a aceitar até 250 W **automaticamente** (sem ele, a faixa era 5–175 W).
 4. Para voltar ao teto de fábrica: `ClearAll(pnpId)` + hot restart → volta para 175 W.
+
+## 7. Status final da noite (23/11)
+
+- **Tudo espelhado no GitHub**: [`github.com/lucasserafin94/Unlock-GPU-`](https://github.com/lucasserafin94/Unlock-GPU-) — o repositório público agora é idêntico ao local (mesmo commit, árvore verificada). O Claude e eu trabalhamos sobre o mesmo repositório; qualquer um dos dois pode dar `git pull`/`push`.
+- **Build limpo**: 0 erros / 0 warnings; **testes 96/96 passando**.
+- **Kit romOverride integrado de verdade no Core** (antes era código morto, excluído da compilação) + `RomOverrideService` pronto para uso — fluxo completo na seção 6.
+- **8 idiomas** no app; textos do README e dos contratos alinhados com a exceção documentada do kit.
+- **Issues-probe da noite removidas** — o repositório está limpo para uso normal (issues/PRs livres).
+- **Próximo passo (manhã)**: `git pull` na sua pasta (ou clonar de novo) e você já tem tudo; o Claude segue com o reforço de código/design por cima dessa base.
+
+> ⚠️ Se o Claude reescrever o README ou os textos de escopo, a exceção do kit Patch precisa ser mantida (seção 5, item 3) — senão o app volta a se auto-limitar na documentação.
