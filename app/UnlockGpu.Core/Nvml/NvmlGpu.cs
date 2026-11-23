@@ -11,6 +11,8 @@ public interface IGpu : IDisposable
     GpuInfo? Info { get; }
     GpuSample Sample();
     double EnforcedLimitW();
+    /// <summary>Configured (management) limit; NaN when the driver does not expose it.</summary>
+    double ConfiguredLimitW() => double.NaN;
     /// <summary>Codigo NVML (0 = ok). Precisa de administrador.</summary>
     int SetPowerLimitW(double watts);
     OffsetInfo? GetOffset(ClockDomain domain);
@@ -122,10 +124,25 @@ public sealed class NvmlGpu : IGpu
         lock (_gate) return EnsureInit() && NvmlNative.GetEnforcedPowerLimit(_dev, out uint v) == 0 ? v / 1000.0 : double.NaN;
     }
 
+    public double ConfiguredLimitW()
+    {
+        lock (_gate) return EnsureInit() && NvmlNative.GetPowerLimit(_dev, out uint v) == 0 ? v / 1000.0 : double.NaN;
+    }
+
+    /// <summary>Runs a write; if the handle went stale (driver restarted), re-opens NVML once and retries.</summary>
+    int Write(Func<IntPtr, int> call)
+    {
+        if (!EnsureInit()) return -1;
+        int rc = call(_dev);
+        if (NvmlNative.NeedsReinit(rc)) { Reinit(); if (!EnsureInit()) return -1; rc = call(_dev); }
+        return rc;
+    }
+
     public int SetPowerLimitW(double watts)
     {
         if (double.IsNaN(watts) || watts <= 0) return NvmlNative.ErrorInvalidArgument;
-        lock (_gate) return EnsureInit() ? NvmlNative.SetPowerLimit(_dev, (uint)Math.Round(watts * 1000.0)) : -1;
+        uint mw = (uint)Math.Round(watts * 1000.0);
+        lock (_gate) return Write(d => NvmlNative.SetPowerLimit(d, mw));
     }
 
     public OffsetInfo? GetOffset(ClockDomain domain)
@@ -142,14 +159,16 @@ public sealed class NvmlGpu : IGpu
     {
         lock (_gate)
         {
-            if (!EnsureInit()) return -1;
-            var o = new NvmlNative.ClockOffset { Version = NvmlNative.ClockOffsetVersion, Type = (int)domain, PState = 0, OffsetMHz = mhz };
-            return NvmlNative.SetClockOffsets(_dev, ref o);
+            return Write(d =>
+            {
+                var o = new NvmlNative.ClockOffset { Version = NvmlNative.ClockOffsetVersion, Type = (int)domain, PState = 0, OffsetMHz = mhz };
+                return NvmlNative.SetClockOffsets(d, ref o);
+            });
         }
     }
 
-    public int LockMemoryClock(uint mhz) { lock (_gate) return EnsureInit() ? NvmlNative.SetMemoryLockedClocks(_dev, mhz, mhz) : -1; }
-    public int ResetMemoryClock() { lock (_gate) return EnsureInit() ? NvmlNative.ResetMemoryLockedClocks(_dev) : -1; }
+    public int LockMemoryClock(uint mhz) { lock (_gate) return Write(d => NvmlNative.SetMemoryLockedClocks(d, mhz, mhz)); }
+    public int ResetMemoryClock() { lock (_gate) return Write(d => NvmlNative.ResetMemoryLockedClocks(d)); }
 
     public string ErrorText(int rc) { lock (_gate) return ErrorTextUnsafe(rc); }
 

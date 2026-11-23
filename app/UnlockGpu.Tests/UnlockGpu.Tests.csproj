@@ -2,6 +2,8 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>UnlockGpu.Tests</RootNamespace>
+    <!-- Test names use Method_Scenario_Expectation underscores (CA1707); [Test] methods are instance methods by design (CA1822). -->
+    <NoWarn>$(NoWarn);CA1707;CA1822</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\UnlockGpu.Core\UnlockGpu.Core.csproj" />

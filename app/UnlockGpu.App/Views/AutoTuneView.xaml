@@ -1,0 +1,134 @@
+<UserControl x:Class="UnlockGpu.App.Views.AutoTuneView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:UnlockGpu.App.Localization">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12,10,12,4">
+            <!-- safety -->
+            <Border Style="{StaticResource DangerBox}" Margin="0,0,0,8">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.tune.warningTitle}" FontWeight="SemiBold" Foreground="{StaticResource DangerBrush}" FontSize="12.5"/>
+                    <TextBlock Text="{l:Tr ui.tune.warning}" TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextBrush}" Margin="0,3,0,0"/>
+                    <TextBlock Text="{l:Tr tune.note.safety}" TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextDimBrush}" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- options -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.tune.options}" Style="{StaticResource SectionTitle}"/>
+                    <StackPanel Orientation="Horizontal" IsEnabled="{Binding IsRunning, Converter={StaticResource Not}}">
+                        <TextBlock Text="{l:Tr ui.tune.target}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                        <RadioButton GroupName="tuneTarget" Content="{l:Tr ui.tune.targetMem}" IsChecked="{Binding TargetMemory}"/>
+                        <RadioButton GroupName="tuneTarget" Content="{l:Tr ui.tune.targetCore}" IsChecked="{Binding TargetCore}"/>
+                    </StackPanel>
+                    <Grid Margin="0,8,0,0" IsEnabled="{Binding IsRunning, Converter={StaticResource Not}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="{l:Tr ui.tune.step}" Style="{StaticResource Caption}" Margin="0,0,0,3"/>
+                            <TextBox Text="{Binding StepText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{l:Tr ui.tune.step}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="{l:Tr ui.tune.max}" Style="{StaticResource Caption}" Margin="0,0,0,3" ToolTip="{l:Tr ui.tune.maxHint}"/>
+                            <TextBox Text="{Binding MaxOffsetText, UpdateSourceTrigger=PropertyChanged}" ToolTip="{l:Tr ui.tune.maxHint}"
+                                     AutomationProperties.Name="{l:Tr ui.tune.max}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <TextBlock Text="{l:Tr ui.tune.seconds}" Style="{StaticResource Caption}" Margin="0,0,0,3"/>
+                            <TextBox Text="{Binding SampleSecondsText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{l:Tr ui.tune.seconds}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="6">
+                            <TextBlock Text="{l:Tr ui.tune.maxTemp}" Style="{StaticResource Caption}" Margin="0,0,0,3"/>
+                            <TextBox Text="{Binding MaxTempText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="{l:Tr ui.tune.maxTemp}"/>
+                        </StackPanel>
+                    </Grid>
+                    <CheckBox Content="{l:Tr ui.tune.vramTest}" IsChecked="{Binding RunVramTest}" Margin="0,10,0,0"
+                              IsEnabled="{Binding TargetMemory}"/>
+                    <TextBlock Text="{l:Tr ui.tune.duration}" Style="{StaticResource Note}"/>
+                    <CheckBox Content="{l:Tr ui.tune.acknowledge}" IsChecked="{Binding Acknowledged}" Margin="0,10,0,0" FontWeight="SemiBold"
+                              IsEnabled="{Binding IsRunning, Converter={StaticResource Not}}"/>
+                    <DockPanel Margin="0,10,0,0">
+                        <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <Button Content="{l:Tr ui.tune.cancel}" Command="{Binding CancelCommand}" Margin="0,0,8,0" Style="{StaticResource DangerButton}"/>
+                            <Button Content="{l:Tr ui.tune.run}" Command="{Binding RunCommand}" Style="{StaticResource AccentButton}"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource AccentBrush}" FontSize="12" VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"/>
+                    </DockPanel>
+                    <TextBlock Text="{l:Tr tune.note.powerCap}" Style="{StaticResource Note}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- result -->
+            <Border Style="{StaticResource Card}" BorderBrush="{DynamicResource AccentBrush}"
+                    Visibility="{Binding HasResult, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.tune.resultTitle}" Style="{StaticResource SectionTitle}"/>
+                    <TextBlock Text="{Binding ResultSummary}" TextWrapping="Wrap" Foreground="{StaticResource TextBrush}" FontSize="12"/>
+                    <TextBlock Text="{l:Tr ui.tune.resultHint}" Style="{StaticResource Note}"/>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                        <Button Content="{l:Tr ui.tune.discard}" Command="{Binding DiscardCommand}" Margin="0,0,8,0"/>
+                        <Button Content="{l:Tr ui.tune.keep}" Command="{Binding KeepCommand}" Style="{StaticResource AccentButton}"/>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- steps -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.tune.steps}" Style="{StaticResource SectionTitle}"/>
+                    <Grid Margin="0,0,0,4" TextBlock.FontSize="11" TextBlock.Foreground="{StaticResource TextFaintBrush}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="90"/>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{l:Tr ui.tune.col.offset}"/>
+                        <TextBlock Grid.Column="1" Text="{l:Tr ui.tune.col.score}"/>
+                        <TextBlock Grid.Column="2" Text="{l:Tr ui.tune.col.gain}"/>
+                        <TextBlock Grid.Column="3" Text="{l:Tr ui.tune.col.errors}"/>
+                        <TextBlock Grid.Column="4" Text="{l:Tr ui.tune.col.note}"/>
+                    </Grid>
+                    <TextBlock Text="{l:Tr ui.tune.noSteps}" Style="{StaticResource Caption}"
+                               Visibility="{Binding HasSteps, Converter={StaticResource InverseBoolToVis}}"/>
+                    <ItemsControl ItemsSource="{Binding Steps}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2" TextBlock.FontSize="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="90"/>
+                                        <ColumnDefinition Width="80"/>
+                                        <ColumnDefinition Width="60"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="O" Text="{Binding Offset}" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Score}" Foreground="{StaticResource TextBrush}"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Gain}" Foreground="{StaticResource TextDimBrush}"/>
+                                    <TextBlock Grid.Column="3" Text="{Binding VramErrors}" Foreground="{StaticResource TextDimBrush}"/>
+                                    <TextBlock Grid.Column="4" Text="{Binding Note}" Foreground="{StaticResource TextDimBrush}" TextWrapping="Wrap" FontSize="11"/>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsBad}" Value="True">
+                                        <Setter TargetName="O" Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{l:Tr bench.scoreHint}" Style="{StaticResource Note}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

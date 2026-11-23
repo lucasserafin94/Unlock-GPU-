@@ -1,0 +1,38 @@
+<UserControl x:Class="UnlockGpu.App.Views.BannerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:UnlockGpu.App.Localization"
+             Visibility="{Binding IsVisible, Converter={StaticResource BoolToVis}}">
+    <Border x:Name="Box" CornerRadius="6" BorderThickness="1" Padding="10,7" Margin="0,0,0,8">
+        <Border.Style>
+            <Style TargetType="Border">
+                <Setter Property="Background" Value="{StaticResource InfoSoftBrush}"/>
+                <Setter Property="BorderBrush" Value="{StaticResource InfoBrush}"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Kind}" Value="Success">
+                        <Setter Property="Background" Value="{StaticResource OkSoftBrush}"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource OkBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Kind}" Value="Warning">
+                        <Setter Property="Background" Value="{StaticResource WarnSoftBrush}"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource WarnBrush}"/>
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding Kind}" Value="Error">
+                        <Setter Property="Background" Value="{StaticResource DangerSoftBrush}"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </Border.Style>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Style="{StaticResource ChromeButton}" Width="26" Height="22" Content="&#xE711;" VerticalAlignment="Top"
+                    Margin="8,-2,-4,0" Command="{Binding DismissCommand}" ToolTip="{l:Tr ui.common.dismiss}"
+                    AutomationProperties.Name="{l:Tr ui.common.dismiss}"/>
+        </Grid>
+    </Border>
+</UserControl>

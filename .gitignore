@@ -11,3 +11,12 @@ obj/
 *.user
 .vs/
 publish/
+
+# Capturas locais de outras ferramentas (fora do escopo do app)
+config/
+# Kit de patch de registro do driver (romOverride): fora do escopo do Unlock GPU, nao versionar
+src/GpuHotRestart.cs
+src/NvApiPrivate.cs
+src/RailCurrents.cs
+src/RomSlot.cs
+tools/capture-romoverride.ps1

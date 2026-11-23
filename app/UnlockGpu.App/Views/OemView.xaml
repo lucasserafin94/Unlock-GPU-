@@ -1,0 +1,55 @@
+<UserControl x:Class="UnlockGpu.App.Views.OemView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:l="clr-namespace:UnlockGpu.App.Localization">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12,10,12,4">
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="{l:Tr ui.oem.refresh}" Command="{Binding RefreshCommand}"/>
+                        <TextBlock Text="{l:Tr ui.oem.title}" Style="{StaticResource SectionTitle}"/>
+                    </DockPanel>
+                    <TextBlock Text="{Binding IdentityText}" Style="{StaticResource Caption}" Visibility="{Binding IdentityText, Converter={StaticResource TextToVis}}"/>
+                    <TextBlock Text="{Binding StatusText}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource Card}" Visibility="{Binding HasState, Converter={StaticResource BoolToVis}}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.oem.valuesTitle}" Style="{StaticResource SectionTitle}"/>
+                    <ItemsControl ItemsSource="{Binding Fields}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="260"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Label}" Style="{StaticResource Caption}"/>
+                                    <TextBlock Grid.Column="1" Text="{Binding Value}" Foreground="{StaticResource TextBrush}" FontSize="12" TextWrapping="Wrap"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{l:Tr oem.readOnlyNote}" Style="{StaticResource Note}"/>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource WarningBox}" Margin="0">
+                <TextBlock Text="{l:Tr ui.oem.writesLater}" TextWrapping="Wrap" FontSize="11.5" Foreground="{StaticResource TextBrush}"/>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

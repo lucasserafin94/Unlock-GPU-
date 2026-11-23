@@ -36,6 +36,7 @@ internal static partial class NvmlNative
     [DllImport(Dll, EntryPoint = "nvmlDeviceGetEnforcedPowerLimit")] public static extern int GetEnforcedPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport(Dll, EntryPoint = "nvmlDeviceGetPowerManagementLimitConstraints")] public static extern int GetLimitConstraints(IntPtr device, out uint minMw, out uint maxMw);
     [DllImport(Dll, EntryPoint = "nvmlDeviceGetPowerManagementDefaultLimit")] public static extern int GetDefaultLimit(IntPtr device, out uint milliwatts);
+    [DllImport(Dll, EntryPoint = "nvmlDeviceGetPowerManagementLimit")] public static extern int GetPowerLimit(IntPtr device, out uint milliwatts);
     [DllImport(Dll, EntryPoint = "nvmlDeviceSetPowerManagementLimit")] public static extern int SetPowerLimit(IntPtr device, uint milliwatts);
     [DllImport(Dll, EntryPoint = "nvmlDeviceGetClockInfo")] public static extern int GetClockInfo(IntPtr device, int type, out uint mhz);
     [DllImport(Dll, EntryPoint = "nvmlDeviceGetMaxClockInfo")] public static extern int GetMaxClockInfo(IntPtr device, int type, out uint mhz);
