@@ -1,11 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>UnlockGpu.Tests</RootNamespace>
+    <!-- The App project is WPF; tests that build ViewModels need the same framework reference. -->
+    <UseWPF>true</UseWPF>
     <!-- Test names use Method_Scenario_Expectation underscores (CA1707); [Test] methods are instance methods by design (CA1822). -->
     <NoWarn>$(NoWarn);CA1707;CA1822</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <!-- UseWPF drops System.IO from implicit usings (Shapes.Path ambiguity); test code relies on it. -->
+    <Using Include="System.IO" />
     <ProjectReference Include="..\UnlockGpu.Core\UnlockGpu.Core.csproj" />
+    <ProjectReference Include="..\UnlockGpu.App\UnlockGpu.App.csproj" />
   </ItemGroup>
 </Project>

@@ -21,7 +21,7 @@ namespace UnlockGpu.Patch;
 public sealed record RomSlotInfo(int Index, int SizeBytes, string Hex, int ShadowOffset, int PayloadWidth, long? RawValue);
 
 /// <summary>UI control → physical slot mapping for the persistent power card.</summary>
-public sealed record RomRoles(int? MaxSlot, int? BaseSlot, int? NvvddSlot, int? MsvddSlot, int? BoardInputSlot)
+public sealed record RomRoles(int? MaxSlot, int? BaseSlot, int? NvvddSlot, int? MsvddSlot, int? BoardInputSlot, int? FactoryDeltaW = null)
 {
     /// <summary>At least one role resolved (the card can be shown).</summary>
     public bool Any => MaxSlot is not null || BaseSlot is not null || NvvddSlot is not null || MsvddSlot is not null || BoardInputSlot is not null;
@@ -38,6 +38,9 @@ public static class RomRoleOffsets
     public const int Nvvdd = 0x57F00;
     /// <summary>MSVDD rail OCP (mA).</summary>
     public const int Msvdd = 0x57EFC;
+
+    /// <summary>Factory power-table delta on this board (vBIOS records MAX=250 W, BASE=225 W): base limit trails the max by this much.</summary>
+    public const int FactoryDeltaW = 25;
 }
 
 /// <summary>
@@ -360,13 +363,15 @@ public sealed class RomOverrideService : IRomOverrideService
         int? nvvdd = ByOffset(RomRoleOffsets.Nvvdd);
         int? msvdd = ByOffset(RomRoleOffsets.Msvdd);
 
+        bool knownBoard = max is not null && base_ is not null;
+
         if (max is null && base_ is null && nvvdd is null && msvdd is null)
         {
             max = SlotAt(0); base_ = SlotAt(1); nvvdd = SlotAt(2); msvdd = SlotAt(3);
         }
 
         int? boardInput = slots.FirstOrDefault(s => s.PayloadWidth == 8 && s.RawValue.HasValue)?.Index;
-        return new RomRoles(max, base_, nvvdd, msvdd, boardInput);
+        return new RomRoles(max, base_, nvvdd, msvdd, boardInput, knownBoard ? RomRoleOffsets.FactoryDeltaW : null);
 
         int? SlotAt(int index) => slots.FirstOrDefault(s => s.Index == index && s.PayloadWidth == 4 && s.RawValue.HasValue)?.Index;
     }

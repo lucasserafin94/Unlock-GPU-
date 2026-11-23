@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:l="clr-namespace:UnlockGpu.App.Localization"
+             xmlns:m="clr-namespace:UnlockGpu.App.Mvvm"
              xmlns:v="clr-namespace:UnlockGpu.App.Views">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="12,10,12,4">
@@ -126,8 +127,9 @@
                         <TextBlock Text="{l:Tr ui.rom.max}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
                         <Slider Grid.Column="1" Minimum="5" Maximum="400" Value="{Binding MaxValue}" SmallChange="5" LargeChange="25"
                                 IsEnabled="{Binding MaxEnabled}" AutomationProperties.Name="{l:Tr ui.rom.max}"/>
-                        <TextBlock Grid.Column="2" Text="{Binding MaxValueText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <TextBox Grid.Column="2" Width="76" Margin="8,0,0,0" HorizontalContentAlignment="Right" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" IsEnabled="{Binding MaxEnabled}"
+                                 Text="{Binding MaxInput, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
 
                         <StackPanel Grid.Row="1" Orientation="Horizontal">
                             <TextBlock Text="{l:Tr ui.rom.base}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -135,29 +137,35 @@
                         </StackPanel>
                         <Slider Grid.Row="1" Grid.Column="1" Minimum="5" Maximum="400" Value="{Binding BaseValue}" SmallChange="5" LargeChange="25"
                                 IsEnabled="{Binding BaseEnabled}" AutomationProperties.Name="{l:Tr ui.rom.base}"/>
-                        <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding BaseValueText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="1" Grid.Column="2" Width="76" Margin="8,0,0,0" HorizontalContentAlignment="Right" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" IsEnabled="{Binding BaseEnabled}"
+                                 Text="{Binding BaseInput, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
 
                         <TextBlock Grid.Row="2" Text="{l:Tr ui.rom.nvvdd}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="30" Value="{Binding NvvddA}" SmallChange="0.5" LargeChange="2"
+                        <Slider Grid.Row="2" Grid.Column="1" Minimum="1" Maximum="400" Value="{Binding NvvddA}" SmallChange="0.5" LargeChange="10"
                                 IsEnabled="{Binding NvvddEnabled}" AutomationProperties.Name="{l:Tr ui.rom.nvvdd}"/>
-                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding NvvddAText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="2" Grid.Column="2" Width="76" Margin="8,0,0,0" HorizontalContentAlignment="Right" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" IsEnabled="{Binding NvvddEnabled}"
+                                 Text="{Binding NvvddInput, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
 
                         <TextBlock Grid.Row="3" Text="{l:Tr ui.rom.msvdd}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="30" Value="{Binding MsvddA}" SmallChange="0.5" LargeChange="2"
+                        <Slider Grid.Row="3" Grid.Column="1" Minimum="1" Maximum="400" Value="{Binding MsvddA}" SmallChange="0.5" LargeChange="10"
                                 IsEnabled="{Binding MsvddEnabled}" AutomationProperties.Name="{l:Tr ui.rom.msvdd}"/>
-                        <TextBlock Grid.Row="3" Grid.Column="2" Text="{Binding MsvddAText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="3" Grid.Column="2" Width="76" Margin="8,0,0,0" HorizontalContentAlignment="Right" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" IsEnabled="{Binding MsvddEnabled}"
+                                 Text="{Binding MsvddInput, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
 
                         <TextBlock Grid.Row="4" Text="{l:Tr ui.rom.boardInput}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
-                        <Slider Grid.Row="4" Grid.Column="1" Minimum="1" Maximum="240" Value="{Binding BoardInputA}" SmallChange="1" LargeChange="10"
+                        <Slider Grid.Row="4" Grid.Column="1" Minimum="1" Maximum="330" Value="{Binding BoardInputA}" SmallChange="1" LargeChange="10"
                                 IsEnabled="{Binding BoardInputEnabled}" AutomationProperties.Name="{l:Tr ui.rom.boardInput}"/>
-                        <TextBlock Grid.Row="4" Grid.Column="2" Text="{Binding BoardInputAText}" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}"
-                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        <TextBox Grid.Row="4" Grid.Column="2" Width="76" Margin="8,0,0,0" HorizontalContentAlignment="Right" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" IsEnabled="{Binding BoardInputEnabled}"
+                                 Text="{Binding BoardInputText, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
                     </Grid>
                     <DockPanel Margin="0,10,0,0">
                         <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                            <Button Content="{l:Tr ui.rom.reset}" Command="{Binding ResetPersistentCommand}" Margin="0,0,8,0"/>
+                            <Button Content="{l:Tr ui.rom.validate}" Command="{Binding ValidateAllCommand}" Margin="0,0,8,0"/>
                             <Button Content="{l:Tr ui.rom.apply}" Command="{Binding ApplyPersistentCommand}" Style="{StaticResource AccentButton}"/>
                         </StackPanel>
                         <TextBlock Text="{l:Tr ui.rom.dirty}" Foreground="{StaticResource WarnBrush}" FontSize="11.5" VerticalAlignment="Center"
@@ -170,14 +178,31 @@
             <Border Style="{StaticResource Card}">
                 <StackPanel>
                     <TextBlock Text="{l:Tr ui.budget.title}" Style="{StaticResource SectionTitle}"/>
-                    <StackPanel Orientation="Horizontal">
+                    <Grid Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="76"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Text="{l:Tr ui.budget.pcfTotal}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Column="1" Minimum="0" Maximum="500" Value="{Binding PcfTotalW}" SmallChange="1" LargeChange="25" Margin="8,0"
+                                AutomationProperties.Name="{l:Tr ui.budget.pcfTotal}"/>
+                        <TextBox Grid.Column="2" HorizontalContentAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}"
+                                 FontWeight="SemiBold" Text="{Binding PcfTotalInput, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
+                        <TextBlock Grid.Row="1" Text="{l:Tr ui.budget.reserve}" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center"/>
+                        <Slider Grid.Row="1" Grid.Column="1" Minimum="0" Maximum="500" Value="{Binding OverheadW}" SmallChange="1" LargeChange="25" Margin="8,0"
+                                AutomationProperties.Name="{l:Tr ui.budget.reserve}"/>
+                        <TextBox Grid.Row="1" Grid.Column="2" HorizontalContentAlignment="Right" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}"
+                                 FontWeight="SemiBold" Text="{Binding OverheadInput, UpdateSourceTrigger=Explicit}" m:CommitOnEnter.Enabled="True"/>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                         <TextBlock Text="{l:Tr ui.budget.adapter}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                         <TextBox Width="64" Margin="8,0,4,0" Text="{Binding AdapterWattsText, UpdateSourceTrigger=PropertyChanged}"
                                  AutomationProperties.Name="{l:Tr ui.budget.adapter}"/>
-                        <TextBlock Text="W" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-                        <TextBlock Text="{l:Tr ui.budget.reserve}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="16,0,0,0"/>
-                        <TextBox Width="56" Margin="8,0,4,0" Text="{Binding ReserveWattsText, UpdateSourceTrigger=PropertyChanged}"
-                                 AutomationProperties.Name="{l:Tr ui.budget.reserve}"/>
                         <TextBlock Text="W" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
                     </StackPanel>
                     <TextBlock Text="{Binding BudgetText}" FontSize="12" TextWrapping="Wrap" Margin="0,8,0,0">

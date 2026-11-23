@@ -55,9 +55,11 @@ public sealed class TuningViewModel : TabViewModel
     /// <summary>Persistent MAX/Base slider range in watts.</summary>
     public const double RomPowerMin = 5, RomPowerMax = 400;
     /// <summary>Rail current slider range in amperes (NVVDD/MSVDD).</summary>
-    public const double RailCurrentMin = 1, RailCurrentMax = 30;
+    public const double RailCurrentMin = 1, RailCurrentMax = 400;
     /// <summary>Board input current slider range in amperes.</summary>
-    public const double BoardInputMin = 1, BoardInputMax = 240;
+    public const double BoardInputMin = 1, BoardInputMax = 330;
+    /// <summary>PCF platform total / overhead slider range in watts.</summary>
+    public const double PcfTotalMin = 0, PcfTotalMax = 500;
     /// <summary>Watts the platform (CPU + board) keeps out of the charger rating when planning the budget.</summary>
     public const int PlatformReserveW = 30;
 
@@ -91,7 +93,10 @@ public sealed class TuningViewModel : TabViewModel
     double _maxW = 250, _baseW = 250;
     bool _syncBase = true;
     double _nvvddA = 15, _msvddA = 15, _boardInputA = 71;
-    string _reserveText = "30";
+    int _factoryDeltaW;
+    string _maxInput = "", _baseInput = "", _nvvddInput = "", _msvddInput = "", _boardInputText = "";
+    double _overheadW = 30;
+    string _pcfTotalInput = "", _overheadInput = "";
     readonly Dictionary<int, long> _slotRaw = new();
     bool _romBusy;
     string _liveLine = "";
@@ -122,7 +127,10 @@ public sealed class TuningViewModel : TabViewModel
         ResetOffsetsCommand = new AsyncRelayCommand(ResetOffsetsAsync, () => _coreAvailable || _memAvailable, _onError);
         ApplyPowerCommand = new AsyncRelayCommand(ApplyPowerAsync, () => _powerSupport == PowerSupport.Adjustable, _onError);
         ApplyPersistentCommand = new AsyncRelayCommand(ApplyPersistentAsync, () => HasRomRoles && IsRomDirty && !_romBusy, _onError);
+        ValidateAllCommand = new AsyncRelayCommand(ValidateAllAsync, () => HasRomRoles && !_romBusy, _onError);
+        ResetPersistentCommand = new AsyncRelayCommand(ResetPersistentAsync, () => HasRomRoles && !_romBusy, _onError);
         UpdateBudget();
+        RefreshInputs();
         UpdateLockStatus();
     }
 
@@ -251,7 +259,7 @@ public sealed class TuningViewModel : TabViewModel
     public double MaxValue
     {
         get => _maxW;
-        set { if (SetProperty(ref _maxW, SnapStep(value, RomPowerMin, RomPowerMax, 5))) OnRomChanged(); }
+        set { if (SetProperty(ref _maxW, SnapStep(value, RomPowerMin, RomPowerMax, 5))) { SyncBaseToMax(); SynchronizePcf(); OnRomChanged(); } }
     }
 
     /// <summary>"250 W".</summary>
@@ -267,7 +275,7 @@ public sealed class TuningViewModel : TabViewModel
     /// <summary>"250 W".</summary>
     public string BaseValueText => Format.WattsWhole(_baseW, L.Culture) + " W";
 
-    /// <summary>When checked the base limit follows MAX (the factory delta on this board is zero).</summary>
+    /// <summary>When checked the base limit follows MAX minus the factory delta (25 W on this board).</summary>
     public bool SyncBase
     {
         get => _syncBase;
@@ -275,10 +283,13 @@ public sealed class TuningViewModel : TabViewModel
         {
             if (!SetProperty(ref _syncBase, value)) return;
             OnPropertyChanged(nameof(BaseEnabled));
-            if (_syncBase) SetExact(ref _baseW, _maxW, nameof(BaseValue), nameof(BaseValueText));
+            if (_syncBase) SyncBaseToMax();
             OnRomChanged();
         }
     }
+
+    /// <summary>Tracks the base limit to MAX minus the factory delta while sync is on.</summary>
+    void SyncBaseToMax() => SetExact(ref _baseW, Math.Max(RomPowerMin, _maxW - _factoryDeltaW), nameof(BaseValue), nameof(BaseValueText));
 
     /// <summary>The MAX slider is usable.</summary>
     public bool MaxEnabled => _roles?.MaxSlot is not null;
@@ -307,6 +318,90 @@ public sealed class TuningViewModel : TabViewModel
     /// <summary>The board input slider is usable.</summary>
     public bool BoardInputEnabled => _roles?.BoardInputSlot is not null;
 
+    // ---------------- typed value boxes (commit on Enter / lost focus, no step snapping) ----------------
+
+    /// <summary>NVIDIA MAX box (W). Commits an exact value when it parses inside the slider range; otherwise reverts.</summary>
+    public string MaxInput
+    {
+        get => _maxInput;
+        set
+        {
+            if (!SetProperty(ref _maxInput, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= RomPowerMin and <= RomPowerMax)
+            {
+                SetExact(ref _maxW, v, nameof(MaxValue), nameof(MaxValueText));
+                SyncBaseToMax();
+                SynchronizePcf();
+                OnRomChanged();
+            }
+            RefreshInputs();
+        }
+    }
+
+    /// <summary>Base Limit box (W). Commits an exact value when it parses inside the slider range; otherwise reverts.</summary>
+    public string BaseInput
+    {
+        get => _baseInput;
+        set
+        {
+            if (!SetProperty(ref _baseInput, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= RomPowerMin and <= RomPowerMax)
+            {
+                SetExact(ref _baseW, v, nameof(BaseValue), nameof(BaseValueText));
+                OnRomChanged();
+            }
+            RefreshInputs();
+        }
+    }
+
+    /// <summary>NVVDD box (A). Commits an exact value when it parses inside the slider range; otherwise reverts.</summary>
+    public string NvvddInput
+    {
+        get => _nvvddInput;
+        set
+        {
+            if (!SetProperty(ref _nvvddInput, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= RailCurrentMin and <= RailCurrentMax)
+            {
+                SetExact(ref _nvvddA, v, nameof(NvvddA), nameof(NvvddAText));
+                OnRomChanged();
+            }
+            RefreshInputs();
+        }
+    }
+
+    /// <summary>MSVDD box (A). Commits an exact value when it parses inside the slider range; otherwise reverts.</summary>
+    public string MsvddInput
+    {
+        get => _msvddInput;
+        set
+        {
+            if (!SetProperty(ref _msvddInput, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= RailCurrentMin and <= RailCurrentMax)
+            {
+                SetExact(ref _msvddA, v, nameof(MsvddA), nameof(MsvddAText));
+                OnRomChanged();
+            }
+            RefreshInputs();
+        }
+    }
+
+    /// <summary>Board input box (A). Commits an exact value when it parses inside the slider range; otherwise reverts.</summary>
+    public string BoardInputText
+    {
+        get => _boardInputText;
+        set
+        {
+            if (!SetProperty(ref _boardInputText, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= BoardInputMin and <= BoardInputMax)
+            {
+                SetExact(ref _boardInputA, v, nameof(BoardInputA), nameof(BoardInputAText));
+                OnRomChanged();
+            }
+            RefreshInputs();
+        }
+    }
+
     /// <summary>True when any persistent control differs from the value stored in the driver key.</summary>
     public bool IsRomDirty => SlotDirty(_roles?.MaxSlot, _maxW) || SlotDirty(_roles?.BaseSlot, _baseW)
         || SlotDirty(_roles?.NvvddSlot, _nvvddA) || SlotDirty(_roles?.MsvddSlot, _msvddA)
@@ -318,12 +413,83 @@ public sealed class TuningViewModel : TabViewModel
     /// <summary>Stages every dirty persistent slot and hot-restarts the GPU once.</summary>
     public AsyncRelayCommand ApplyPersistentCommand { get; }
 
+    /// <summary>Re-reads every persistent control from the driver key and confirms each stored value.</summary>
+    public AsyncRelayCommand ValidateAllCommand { get; }
+
+    /// <summary>Returns the persistent controls to what is currently stored in the driver key.</summary>
+    public AsyncRelayCommand ResetPersistentCommand { get; }
+
     /// <summary>Persistent status line: applied → read-back confirmations for this tab's controls.</summary>
     public string LiveLine { get => _liveLine; private set { if (SetProperty(ref _liveLine, value)) OnPropertyChanged(nameof(HasLiveLine)); } }
     /// <summary>The live strip has text to show.</summary>
     public bool HasLiveLine => !string.IsNullOrEmpty(_liveLine);
 
     // ---------------- budget ----------------
+
+    /// <summary>Platform overhead above the GPU ceiling (W): what the CPU and board take from the charger.</summary>
+    public double OverheadW
+    {
+        get => _overheadW;
+        set { if (SetProperty(ref _overheadW, SnapStep(value, PcfTotalMin, PcfTotalMax, 1))) SynchronizePcf(); }
+    }
+
+    /// <summary>Whole-platform total (W): GPU ceiling + overhead, capped at the slider range.</summary>
+    public double PcfTotalW
+    {
+        get
+        {
+            double max = Math.Round(EffectiveMaxW());
+            return double.IsNaN(max) ? 0 : Math.Min(PcfTotalMax, max + Math.Round(_overheadW));
+        }
+        set
+        {
+            double max = Math.Round(EffectiveMaxW());
+            if (double.IsNaN(max)) return;
+            _overheadW = Math.Max(0, Math.Round(value) - max);
+            SynchronizePcf();
+        }
+    }
+
+    /// <summary>PCF total box (W). Commits through the PCF invariant; out-of-range entries revert.</summary>
+    public string PcfTotalInput
+    {
+        get => _pcfTotalInput;
+        set
+        {
+            if (!SetProperty(ref _pcfTotalInput, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= PcfTotalMin and <= PcfTotalMax)
+                PcfTotalW = v;
+            RefreshInputs();
+        }
+    }
+
+    /// <summary>Overhead box (W). Commits through the PCF invariant; out-of-range entries revert.</summary>
+    public string OverheadInput
+    {
+        get => _overheadInput;
+        set
+        {
+            if (!SetProperty(ref _overheadInput, value)) return;
+            if (TryParseNumber(value, out double v) && v is >= PcfTotalMin and <= PcfTotalMax)
+                OverheadW = v;
+            RefreshInputs();
+        }
+    }
+
+    /// <summary>Keeps total and overhead consistent: total = min(500 W, max + overhead), never below the ceiling.</summary>
+    void SynchronizePcf()
+    {
+        double max = Math.Round(EffectiveMaxW());
+        if (!double.IsNaN(max))
+        {
+            double total = Math.Min(PcfTotalMax, max + Math.Round(_overheadW));
+            if (total < max) total = max;
+            _overheadW = total - max;
+        }
+        OnPropertyChanged(nameof(OverheadW));
+        OnPropertyChanged(nameof(PcfTotalW));
+        UpdateBudget();
+    }
 
     /// <summary>Charger rating typed by the user (W).</summary>
     public string AdapterWattsText
@@ -430,6 +596,7 @@ public sealed class TuningViewModel : TabViewModel
             nameof(PowerSupportText), nameof(PowerLimitsText), nameof(PowerValueText));
         LiveLine = "";
         UpdateBudget();
+        RefreshInputs();
         UpdateLockStatus();
     }
 
@@ -551,6 +718,55 @@ public sealed class TuningViewModel : TabViewModel
         }
     }
 
+    /// <summary>Re-reads every persistent control from the driver key and confirms each stored value.</summary>
+    async Task ValidateAllAsync()
+    {
+        string? pnpId = await Task.Run(() => _rom.FindGpuPnpId()).ConfigureAwait(true);
+        if (pnpId == null)
+        {
+            ReadBack.Show(L.T("svc.rom.error.noGpu"), BannerKind.Error);
+            return;
+        }
+
+        RomBusy = true;
+        try
+        {
+            IReadOnlyList<RomSlotInfo> slots = await Task.Run(() => _rom.ReadSlots(pnpId, out _)).ConfigureAwait(true);
+            var checks = new (string Label, string ValueText, double Value, int? Slot)[]
+            {
+                (L.T("ui.rom.max"), Format.WattsWhole(_maxW, L.Culture) + " W", _maxW, _roles?.MaxSlot),
+                (L.T("ui.rom.base"), Format.WattsWhole(_baseW, L.Culture) + " W", _baseW, _roles?.BaseSlot),
+                (L.T("ui.rom.nvvdd"), Format.Amperes(_nvvddA, L.Culture), _nvvddA, _roles?.NvvddSlot),
+                (L.T("ui.rom.msvdd"), Format.Amperes(_msvddA, L.Culture), _msvddA, _roles?.MsvddSlot),
+                (L.T("ui.rom.boardInput"), Format.Amperes(_boardInputA, L.Culture), _boardInputA, _roles?.BoardInputSlot),
+            };
+
+            int ok = 0;
+            var parts = new List<string>();
+            foreach (var c in checks)
+            {
+                if (c.Slot is not int s) continue;
+                bool match = slots.FirstOrDefault(x => x.Index == s)?.RawValue is long raw && raw == (long)Math.Round(c.Value * 1000);
+                if (match) ok++;
+                parts.Add($"{c.Label} {c.ValueText}{(match ? " ✓" : " ✗")}");
+            }
+
+            LiveLine = string.Join(" · ", parts);
+            ReadBack.Show(L.T("ui.rom.validateResult", ("ok", ok), ("total", parts.Count)), ok == parts.Count ? BannerKind.Success : BannerKind.Warning);
+        }
+        finally
+        {
+            RomBusy = false;
+        }
+    }
+
+    /// <summary>Returns the persistent controls to what is currently stored in the driver key.</summary>
+    async Task ResetPersistentAsync()
+    {
+        await ReloadRomSlotsAsync().ConfigureAwait(true);
+        LiveLine = L.T("ui.rom.resetDone");
+    }
+
     /// <summary>Re-reads the driver's persistent slots and re-resolves which control maps to which slot.</summary>
     async Task ReloadRomSlotsAsync()
     {
@@ -563,6 +779,7 @@ public sealed class TuningViewModel : TabViewModel
     void SetRoles(RomRoles roles, IReadOnlyList<RomSlotInfo> slots)
     {
         _roles = roles;
+        _factoryDeltaW = roles.FactoryDeltaW ?? 0;
         _hasRoles = roles.Any;
         OnPropertyChanged(nameof(HasRomRoles));
         OnPropertiesChanged(nameof(MaxEnabled), nameof(BaseEnabled), nameof(NvvddEnabled), nameof(MsvddEnabled), nameof(BoardInputEnabled));
@@ -573,14 +790,16 @@ public sealed class TuningViewModel : TabViewModel
         SetExactSlot(roles.NvvddSlot, ref _nvvddA, nameof(NvvddA), nameof(NvvddAText));
         SetExactSlot(roles.MsvddSlot, ref _msvddA, nameof(MsvddA), nameof(MsvddAText));
         SetExactSlot(roles.BoardInputSlot, ref _boardInputA, nameof(BoardInputA), nameof(BoardInputAText));
-        if (_syncBase) SetExact(ref _baseW, _maxW, nameof(BaseValue), nameof(BaseValueText));
+        if (_syncBase) SyncBaseToMax();
         OnRomChanged();
+        RefreshInputs();
     }
 
     void OnRomChanged()
     {
         OnPropertyChanged(nameof(IsRomDirty));
         ApplyPersistentCommand.RaiseCanExecuteChanged();
+        UpdateBudget();
     }
 
     /// <summary>Sets a slider field to an exact stored value without snapping it to the grid.</summary>
@@ -602,6 +821,23 @@ public sealed class TuningViewModel : TabViewModel
     /// <summary>True when the slot's stored raw value differs from the slider's (raw = value × 1000).</summary>
     bool SlotDirty(int? slot, double value) =>
         slot is int s && _slotRaw.TryGetValue(s, out long stored) && Math.Abs(stored - (long)Math.Round(value * 1000)) > 0;
+
+    /// <summary>Reformats every typed box from the model (after a commit, a language change or a reload).</summary>
+    void RefreshInputs()
+    {
+        _maxInput = Num(_maxW); OnPropertyChanged(nameof(MaxInput));
+        _baseInput = Num(_baseW); OnPropertyChanged(nameof(BaseInput));
+        _nvvddInput = Num(_nvvddA); OnPropertyChanged(nameof(NvvddInput));
+        _msvddInput = Num(_msvddA); OnPropertyChanged(nameof(MsvddInput));
+        _boardInputText = Num(_boardInputA); OnPropertyChanged(nameof(BoardInputText));
+        _pcfTotalInput = Num(PcfTotalW); OnPropertyChanged(nameof(PcfTotalInput));
+        _overheadInput = Num(_overheadW); OnPropertyChanged(nameof(OverheadInput));
+    }
+
+    /// <summary>"0.###" in the current culture; empty for unknown.</summary>
+    string Num(double v) => double.IsNaN(v) ? "" : v.ToString("0.###", L.Culture);
+
+    bool TryParseNumber(string? text, out double value) => double.TryParse(text, NumberStyles.Float, L.Culture, out value);
 
     async Task RunLockAsync(bool enable)
     {
@@ -710,7 +946,7 @@ public sealed class TuningViewModel : TabViewModel
             BudgetLow = false;
             return;
         }
-        int reserve = ParseReserve(_reserveText);
+        int reserve = (int)Math.Round(_overheadW);
         double total = max + reserve;
         double ceiling = adapter - PlatformReserveW;
         string text = L.T("ui.budget.total", ("max", Format.WattsWhole(max, c)), ("reserve", reserve.ToString(c)), ("total", Format.WattsWhole(total, c)));
@@ -718,10 +954,6 @@ public sealed class TuningViewModel : TabViewModel
         if (BudgetLow) text += Environment.NewLine + L.T("ui.budget.overAdapter", ("total", Format.WattsWhole(total, c)), ("ceiling", Format.WattsWhole(ceiling, c)));
         BudgetText = text;
     }
-
-    /// <summary>Platform reserve in watts; out-of-range entries fall back to 30.</summary>
-    int ParseReserve(string? text) =>
-        int.TryParse(text, NumberStyles.Integer, L.Culture, out int v) && v is >= 0 and <= 500 ? v : 30;
 
     int ParseAdapterWatts(string? text) =>
         int.TryParse(text, NumberStyles.Integer, L.Culture, out int v) && v is > 0 and <= 1000 ? v : 0;

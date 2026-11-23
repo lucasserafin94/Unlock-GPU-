@@ -32,20 +32,20 @@ A captura em [`config/romoverride-capture.txt`](../config/romoverride-capture.tx
 |---|---|---|
 | Monitor ao vivo de potência (W) | ✅ | `MonitorViewModel` + gráfico 3 min + sessão CSV por segundo |
 | Limite de potência em slider na faixa do driver | ✅ | `PowerService` via NVML, com verificação "aplicado → lido de volta" |
-| Teto MAX/Base **além da vBIOS** (romOverride) | ✅ **kit Patch + sliders dedicados (v4.2)** | Aba Tuning → "Persistent power ceiling": slider NVIDIA MAX (5–400 W, passo 5) grava o slot 00; Base Limit com checkbox ⇄ Sync grava o slot 01 (sync = base acompanha o max, delta de fábrica); botão único *Stage & restart* aplica tudo sujo + 1 hot restart + verificação byte-a-byte | 
-| Correntes OCP NVVDD/MSVDD + Board Input (ler + gravar) | ✅ leitura / ✅ gravação via slots 02/03/04 (v4.2) | Leitura: `RailCurrents.cs` (Type19, chamada interna do driver); gravação: sliders NVVDD/MSVDD (1–30 A, passo 0,5) e Board Input (1–240 A) na mesma card persistente; valores exatos da captura (ex.: 15,001 A) preservados sem snap |
+| Teto MAX/Base **além da vBIOS** (romOverride) | ✅ **kit Patch + sliders dedicados (v4.2)** + caixas de valor e botões Validate/Reset (v4.3) | Aba Tuning → "Persistent power ceiling": slider NVIDIA MAX (5–400 W, passo 5) grava o slot 00; Base Limit com checkbox ⇄ Sync grava o slot 01 — o sync usa o **delta de fábrica detectado** (`ResolveRoles` reporta `FactoryDeltaW = 25 W` para o layout conhecido desta placa; fallback denso → sem delta); cada controle tem **caixa de valor editável** (Enter ou perda de foco confirma, `CommitOnEnter`; fora da faixa volta sozinho); botões *Validate All* (re-lê a chave do driver e confere cada slot: ✓/✗ por controle na LiveLine) e *Reset* (volta aos valores gravados); botão único *Stage & restart* aplica tudo sujo + 1 hot restart + verificação byte-a-byte | 
+| Correntes OCP NVVDD/MSVDD + Board Input (ler + gravar) | ✅ leitura / ✅ gravação via slots 02/03/04 (v4.2), faixas ampliadas e caixas editáveis (v4.3) | Leitura: `RailCurrents.cs` (Type19, chamada interna do driver); gravação: sliders NVVDD/MSVDD (**1–400 A**, passo 0,5) e Board Input (**1–330 A**) na mesma card persistente, cada um com caixa de valor editável; valores exatos da captura (ex.: 15,001 A) preservados sem snap |
 | Offsets de clock do núcleo e memória | ✅ | `OffsetService` (NVML) + trava VRAM P0/P2 — e o auto-tuner com bench D3D11 mede a pontuação a cada passo, **melhor** que o concorrente |
 | Perfis / planos (planner de 7 domínios) | ✅ perfis / ⏳ planner por domínio | `ProfileStore` + applier + startup + backup ZIP; o "plan" por domínio é v2 |
 | Monitor: temperatura, motivo do corte | ✅ | NVML: temperatura, P-state, throttle reasons traduzidos |
 | Monitor: hotspot, voltagem, fan PWM | ⏳ parcial / v2 | Fan/energia da plataforma: aba Uniwill EC (somente leitura); voltagem e hotspot = chamadas internas do driver (v2) |
-| PCF platform controller / contrato Lenovo | ✅ informativo (v4.2) / ⏳ escrita direta = v2 | Card de orçamento: entrada de reserva de plataforma (padrão 30 W) + texto "GPU até {max} W + reserva {reserve} W = total {total} W" + alerta quando o total passa do teto de planejamento (carregador − 30 W); a escrita real na plataforma continua na aba OEM Uniwill EC |
+| PCF platform controller / contrato Lenovo | ✅ informativo + sliders Total/Overhead com invariante (v4.3) / ⏳ escrita direta = v2 | Card de orçamento: **Total** e **Reserva (overhead)** agora têm slider 0–500 W + caixa editável, mantendo a invariante `total = min(500 W, max + overhead)` — mover um recalcula o outro; entrada de reserva de plataforma (padrão 30 W) + alerta quando o total passa do teto de planejamento (carregador − 30 W); a escrita real na plataforma continua na aba OEM Uniwill EC |
 | Offsets SYS/Video/XBAR + "estender faixa de memória até 6000 MHz" | ⏳ v2 | via QI privado do NVAPI — stub `NvApiPrivate.cs` já está no kit |
 | Voltage demand domains | ⏳ v2 | domínio de demanda de voltagem (chamada interna) |
 | Override completo da BIOS via nvflash (imagem inteira) | ⏳ v2 | o concorrente grava a imagem toda; a gente faz só os slots romOverride (mais cirúrgico, mas menos alcance) |
 | Ownership journal + baseline imutável | ⏳ v2 | "quem mudou o quê e quando" + snapshot de fábrica; hoje o arquivo de captura é a versão manual do baseline |
 | Exportação de diagnósticos | ✅ | CSV de sessão para Excel (`;` / vírgula decimal) + backup ZIP export/import |
 
-**Resumo (v4.2):** tudo que o concorrente faz no dia a dia (potência runtime + teto MAX/Base além da vBIOS com sliders próprios, correntes dos rails NVVDD/MSVDD/Board Input, offsets, perfis, monitor, orçamento de plataforma, exportação) já está coberto — inclusive a faixa 5–400 W do slider dele. O que falta é o "segundo andar": planner por domínio, journal de propriedade, voltagem/hotspot/fan via chamadas internas, escrita direta no PCF e nvflash completo — tudo listado como v2 abaixo.
+**Resumo (v4.3):** tudo que o concorrente faz no dia a dia (potência runtime + teto MAX/Base além da vBIOS com sliders próprios **e caixas de valor exato**, correntes dos rails NVVDD/MSVDD/Board Input em faixas amplas 1–400 A / 1–330 A, offsets, perfis, monitor, orçamento PCF com Total/Overhead acoplados, exportação) já está coberto — inclusive a faixa 5–400 W do slider dele. O que falta é o "segundo andar": planner por domínio, journal de propriedade, voltagem/hotspot/fan via chamadas internas, escrita direta no PCF e nvflash completo — tudo listado como v2 abaixo.
 
 ## 3. O que o kit Patch preenche (`app/UnlockGpu.Core/Patch`, namespace `UnlockGpu.Patch`)
 
@@ -97,3 +97,14 @@ O Claude tinha se limitado sozinho em três lugares:
 - **Próximo passo**: baixar o release 4.2, rodar como admin e testar os sliders persistentes na sua GPU (o driver já está com o teto de 250 W ativo).
 
 > ⚠️ Se o Claude reescrever o README ou os textos de escopo, a exceção do kit Patch precisa ser mantida (seção 5, item 3) — senão o app volta a se auto-limitar na documentação.
+
+## 8. Status v4.3.0 (23/11)
+
+- **Caixas de valor editáveis em todos os controles persistentes** (MAX, Base, NVVDD, MSVDD, Board Input) e no card PCF (Total, Reserva): digitar + Enter ou sair do campo confirma o valor exato — sem snap para o passo do slider; entrada fora da faixa volta sozinha. Comportamento via attached behavior `CommitOnEnter` (`Mvvm/CommitOnEnter.cs`) + `UpdateSourceTrigger=Explicit`; vírgula decimal aceita (pt-BR).
+- **Faixas dos rails ampliadas**: NVVDD/MSVDD 1–400 A e Board Input 1–330 A (eram 1–30 / 1–240) — cobre o que a vBIOS expõe sem estourar valores plausíveis.
+- **Delta de fábrica no sync MAX→Base**: `ResolveRoles` agora reporta `FactoryDeltaW` (25 W para o layout conhecido desta placa; fallback denso → null = delta 0). Com Sync ligado, Base acompanha `MAX − 25 W`, igual ao comportamento do concorrente.
+- **Invariante PCF Total/Overhead**: mover um recalcula o outro (`total = min(500 W, max + overhead)`, nunca abaixo do teto); os dois têm slider 0–500 W + caixa editável.
+- **Botões Validate All e Reset** na card persistente: Validate re-lê a chave de classe do driver e confere cada slot (✓/✗ por controle na LiveLine, banner verde se tudo bate); Reset volta aos valores gravados no driver sem reiniciar.
+- **5 novas chaves i18n** em todos os 8 idiomas (validar, reset, caixas de valor).
+- **Testes: 114/114** (+13 novos em `TuningPcfTests.cs`: resolução de papéis com delta de fábrica, sync MAX→Base, invariante PCF nos dois sentidos + teto 500 W, commit exato da caixa sem snap, rejeição fora de faixa, vírgula decimal pt-BR, load exato não marca sujo, faixa ampla dos rails, Validate All em estado misto).
+- **Build limpo**: 0 erros / 0 warnings com `TreatWarningsAsErrors` (corrigido o `RegisterAttached` do .NET 10 WPF: agora vive em `DependencyProperty.RegisterAttached(name, type, ownerType, metadata)`).
