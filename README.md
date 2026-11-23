@@ -49,7 +49,7 @@ O problema é que **muitos notebooks não deixam a placa chegar perto desse teto
 | Clocks de fábrica conservadores | **offsets de núcleo e memória** dentro da faixa que o driver aceita, com ajuste automático que mede o ganho real |
 | Ajustes que somem sozinhos | perfis aplicados ao entrar no Windows e reaplicados depois de um reinício do driver |
 
-> **Até onde ele vai:** o Unlock GPU leva a placa até o teto que ela mesma informa e tira o máximo de desempenho dentro dele. No caminho padrão ele **não ultrapassa** o limite gravado na vBIOS pela NVIDIA e pelo fabricante, porque isso exige modificar firmware e coloca o hardware em risco. Quando você quer ir além, existe um recurso de primeira classe: o **kit de offset da vBIOS (aba ROM)** grava os slots `romOverrideXX` na chave de classe do driver e reinicia a placa em quente — elevando o próprio teto, de 175 W para 250 W numa RTX 5090 Laptop (detalhes em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
+> **Até onde ele vai:** o Unlock GPU leva a placa até o teto que ela mesma informa e tira o máximo de desempenho dentro dele. No caminho padrão ele **não ultrapassa** o limite gravado na vBIOS pela NVIDIA e pelo fabricante, porque isso exige modificar firmware e coloca o hardware em risco. Quando você quer ir além, existe um recurso de primeira classe: o **kit de offset da vBIOS (aba ROM)** grava os slots `romOverrideXX` na chave de classe do driver e reinicia a placa em quente — elevando o próprio teto — de 175 W para 250 W numa RTX 5090 Laptop, com casos reais passando de 300 W em outras placas; o controle vai até 400 W (detalhes em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
 
 O controle de modo e TGP começa pelos notebooks **Tongfang/Uniwill** (PCSpecialist, XMG, TUXEDO, Eluktronics e outros), pela mesma interface que o painel do fabricante usa. Outras marcas vêm em seguida.
 
@@ -141,7 +141,7 @@ Se o teste for cancelado, o driver reiniciar ou algo falhar, o offset original �
 | Backup e restauração dos valores | ✅ |
 | Ícone na bandeja e cor de destaque | ✅ |
 | Modo, TGP configurável e Dynamic Boost no máximo da placa (Tongfang/Uniwill): leitura e gravação | ✅ |
-| Kit de offset da vBIOS (romOverride): eleva o teto de 175 W para 250 W (aba ROM) | ✅ |
+| Kit de offset da vBIOS (romOverride): eleva o teto além da vBIOS — 175→250 W na RTX 5090 Laptop, casos reais passam de 300 W; controle até 400 W (aba ROM) | ✅ |
 | Instalador | ✅ |
 
 ✅ pronto · 🚧 em construção · 🔜 planejado
@@ -187,7 +187,7 @@ Precisa do [.NET 10 SDK](https://dotnet.microsoft.com/download). O projeto não 
 
 ## English
 
-**Unlock GPU** is a free Windows app that **unlocks the untapped potential of your laptop's NVIDIA GPU**. Many laptops ship running the GPU well below its rated maximum (silent or balanced vendor modes, configurable TGP or Dynamic Boost turned down). Unlock GPU shows exactly what is holding the card back, raises the vendor mode and configurable TGP up to the card's own ceiling on supported laptops (Tongfang/Uniwill first), and tunes clocks within the driver's range. By default it never goes beyond the limit stored in the vBIOS; when you want more, the built-in **vBIOS offset kit (ROM tab)** writes the `romOverrideXX` slots to the driver's class key and hot-restarts the card, raising the ceiling itself from 175 W to 250 W on an RTX 5090 Laptop (see [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
+**Unlock GPU** is a free Windows app that **unlocks the untapped potential of your laptop's NVIDIA GPU**. Many laptops ship running the GPU well below its rated maximum (silent or balanced vendor modes, configurable TGP or Dynamic Boost turned down). Unlock GPU shows exactly what is holding the card back, raises the vendor mode and configurable TGP up to the card's own ceiling on supported laptops (Tongfang/Uniwill first), and tunes clocks within the driver's range. By default it never goes beyond the limit stored in the vBIOS; when you want more, the built-in **vBIOS offset kit (ROM tab)** writes the `romOverrideXX` slots to the driver's class key and hot-restarts the card, raising the ceiling itself — from 175 W to 250 W on an RTX 5090 Laptop, with real-world cases past 300 W on other boards (the control goes up to 400 W; see [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md)).
 
 - **Live monitor** of power (now and average), core, SM and memory clocks, VRAM use, P-state, temperature and utilisation, with every clock-limit reason shown as a readable tag ("power limited", "thermal", "power brake").
 - **Core and memory offsets** within the range the driver reports, each one **read back from the hardware** and confirmed.
