@@ -15,12 +15,20 @@ public sealed class PowerGraph : FrameworkElement
 {
     const double PadLeft = 34, PadRight = 44, PadTop = 8, PadBottom = 18;
     static readonly TimeSpan GapBreak = TimeSpan.FromSeconds(10);
+    static readonly DashStyle GridDash = Frozen(new DashStyle([2, 3], 0));
+    static readonly DashStyle LimitDash = Frozen(new DashStyle([6, 4], 0));
+    static readonly Typeface UiFont = new("Segoe UI");
 
     readonly DrawingVisual _plot = new();
     readonly DrawingVisual _hover = new();
     readonly VisualCollection _children;
     Point? _mouse;
     Frame? _frame;
+    // Redraw pedido enquanto invisivel (bandeja / outra aba): desenha quando voltar a ficar visivel.
+    bool _dirty;
+    // Pens reaproveitados entre ticks; recriados so quando o brush correspondente muda.
+    Pen? _gridPen, _limitPen, _memPen, _corePen, _powerPen, _hoverLinePen, _tooltipBorderPen;
+    RectangleGeometry? _clip;
 
     /// <summary>Creates the control.</summary>
     public PowerGraph()
@@ -28,6 +36,10 @@ public sealed class PowerGraph : FrameworkElement
         _children = new VisualCollection(this) { _plot, _hover };
         ClipToBounds = true;
         SnapsToDevicePixels = true;
+        IsVisibleChanged += (_, _) =>
+        {
+            if (IsVisible && _dirty) Redraw();
+        };
     }
 
     #region dependency properties
@@ -159,6 +171,8 @@ public sealed class PowerGraph : FrameworkElement
 
     void Redraw()
     {
+        if (!IsVisible) { _dirty = true; return; }
+        _dirty = false;
         double w = ActualWidth, h = ActualHeight;
         using var dc = _plot.RenderOpen();
         dc.DrawRectangle(Background, null, new Rect(0, 0, Math.Max(0, w), Math.Max(0, h)));
@@ -170,18 +184,34 @@ public sealed class PowerGraph : FrameworkElement
         int minutes = Math.Max(1, Minutes);
         DateTime end = all.Count > 0 ? all[^1].Time : DateTime.Now;
         DateTime start = end - TimeSpan.FromMinutes(minutes);
-        var visible = all.Where(s => s.Time >= start).ToArray();
-        var ok = visible.Where(s => s.Ok).ToArray();
 
-        double limit = ok.Length > 0 ? ok[^1].LimitW : double.NaN;
-        double peakW = ok.Select(s => s.PowerW).Where(v => !double.IsNaN(v)).DefaultIfEmpty(0).Max();
+        // Uma passada sem LINQ: copia as amostras da janela e calcula picos/limite das amostras validas.
+        int count = 0;
+        for (int i = 0; i < all.Count; i++)
+            if (all[i].Time >= start) count++;
+        var visible = new GpuSample[count];
+        int okCount = 0, k = 0;
+        double limit = double.NaN, peakW = 0, peakCore = 0, peakMem = 0;
+        for (int i = 0; i < all.Count; i++)
+        {
+            var s = all[i];
+            if (s.Time < start) continue;
+            visible[k++] = s;
+            if (!s.Ok) continue;
+            okCount++;
+            limit = s.LimitW;
+            if (!double.IsNaN(s.PowerW) && s.PowerW > peakW) peakW = s.PowerW;
+            if (s.CoreMHz > peakCore) peakCore = s.CoreMHz;
+            if (s.MemMHz > peakMem) peakMem = s.MemMHz;
+        }
+
         double maxW = RoundUp(Math.Max(Math.Max(peakW, double.IsNaN(limit) ? 0 : limit) * 1.1, 50), 25);
-        double maxCore = RoundUp(Math.Max(ok.Select(s => (double)s.CoreMHz).DefaultIfEmpty(0).Max() * 1.1, 1000), 500);
-        double maxMem = RoundUp(Math.Max(ok.Select(s => (double)s.MemMHz).DefaultIfEmpty(0).Max() * 1.1, 1000), 1000);
+        double maxCore = RoundUp(Math.Max(peakCore * 1.1, 1000), 500);
+        double maxMem = RoundUp(Math.Max(peakMem * 1.1, 1000), 1000);
         var frame = new Frame(plot, start, end, maxW, maxCore, maxMem, visible);
         _frame = frame;
 
-        var grid = new Pen(GridBrush, 1) { DashStyle = new DashStyle([2, 3], 0) };
+        var grid = CachedPen(ref _gridPen, GridBrush, 1, GridDash);
         double dip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var culture = Culture ?? CultureInfo.InvariantCulture;
         for (int i = 0; i <= 4; i++)
@@ -204,7 +234,7 @@ public sealed class PowerGraph : FrameworkElement
             DrawText(dc, label, new Point(x, plot.Bottom + 9), TextBrush, 10, dip, align);
         }
 
-        if (ok.Length == 0)
+        if (okCount == 0)
         {
             if (!string.IsNullOrEmpty(EmptyText))
                 DrawText(dc, EmptyText, new Point(plot.Left + (plot.Width / 2), plot.Top + (plot.Height / 2)), TextBrush, 12, dip, TextAlignment.Center);
@@ -212,14 +242,19 @@ public sealed class PowerGraph : FrameworkElement
             return;
         }
 
-        dc.PushClip(new RectangleGeometry(plot));
-        DrawSeries(dc, frame, visible, s => (double)s.MemMHz, maxMem, MemBrush, 1.3);
-        DrawSeries(dc, frame, visible, s => (double)s.CoreMHz, maxCore, CoreBrush, 1.3);
-        DrawSeries(dc, frame, visible, s => s.PowerW, maxW, PowerBrush, 2.0);
+        if (_clip == null || _clip.Rect != plot)
+        {
+            _clip = new RectangleGeometry(plot);
+            _clip.Freeze();
+        }
+        dc.PushClip(_clip);
+        DrawSeries(dc, frame, visible, s => (double)s.MemMHz, maxMem, CachedPen(ref _memPen, MemBrush, 1.3, null, PenLineJoin.Round));
+        DrawSeries(dc, frame, visible, s => (double)s.CoreMHz, maxCore, CachedPen(ref _corePen, CoreBrush, 1.3, null, PenLineJoin.Round));
+        DrawSeries(dc, frame, visible, s => s.PowerW, maxW, CachedPen(ref _powerPen, PowerBrush, 2.0, null, PenLineJoin.Round));
         if (!double.IsNaN(limit) && limit > 0)
         {
             double y = frame.Y(limit, maxW);
-            var pen = new Pen(LimitBrush, 1.2) { DashStyle = new DashStyle([6, 4], 0) };
+            var pen = CachedPen(ref _limitPen, LimitBrush, 1.2, LimitDash);
             dc.DrawLine(pen, new Point(plot.Left, y), new Point(plot.Right, y));
             DrawText(dc, LimitLabel + " " + limit.ToString("0", culture) + " W", new Point(plot.Right - 4, Math.Max(plot.Top + 7, y - 8)),
                 LimitBrush, 10, dip, TextAlignment.Right);
@@ -228,7 +263,7 @@ public sealed class PowerGraph : FrameworkElement
         DrawHover();
     }
 
-    static void DrawSeries(DrawingContext dc, Frame f, IReadOnlyList<GpuSample> samples, Func<GpuSample, double> value, double max, Brush brush, double thickness)
+    static void DrawSeries(DrawingContext dc, Frame f, IReadOnlyList<GpuSample> samples, Func<GpuSample, double> value, double max, Pen pen)
     {
         var geo = new StreamGeometry();
         using (var ctx = geo.Open())
@@ -246,7 +281,7 @@ public sealed class PowerGraph : FrameworkElement
             }
         }
         geo.Freeze();
-        dc.DrawGeometry(null, new Pen(brush, thickness) { LineJoin = PenLineJoin.Round }, geo);
+        dc.DrawGeometry(null, pen, geo);
     }
 
     void DrawHover()
@@ -266,7 +301,7 @@ public sealed class PowerGraph : FrameworkElement
         if (best == null) return;
 
         double x = f.X(best.Time);
-        dc.DrawLine(new Pen(TextBrush, 1), new Point(x, f.Plot.Top), new Point(x, f.Plot.Bottom));
+        dc.DrawLine(CachedPen(ref _hoverLinePen, TextBrush, 1, null), new Point(x, f.Plot.Top), new Point(x, f.Plot.Bottom));
         if (!double.IsNaN(best.PowerW)) dc.DrawEllipse(PowerBrush, null, new Point(x, f.Y(best.PowerW, f.MaxW)), 3, 3);
         dc.DrawEllipse(CoreBrush, null, new Point(x, f.Y(best.CoreMHz, f.MaxCore)), 2.5, 2.5);
         dc.DrawEllipse(MemBrush, null, new Point(x, f.Y(best.MemMHz, f.MaxMem)), 2.5, 2.5);
@@ -281,12 +316,12 @@ public sealed class PowerGraph : FrameworkElement
         double bw = ft.Width + 12, bh = ft.Height + 8;
         double bx = x + 10 + bw > f.Plot.Right ? x - 10 - bw : x + 10;
         double by = Math.Clamp(m.Y - (bh / 2), f.Plot.Top, Math.Max(f.Plot.Top, f.Plot.Bottom - bh));
-        dc.DrawRoundedRectangle(TooltipBackground, new Pen(GridBrush, 1), new Rect(bx, by, bw, bh), 4, 4);
+        dc.DrawRoundedRectangle(TooltipBackground, CachedPen(ref _tooltipBorderPen, GridBrush, 1, null), new Rect(bx, by, bw, bh), 4, 4);
         dc.DrawText(ft, new Point(bx + 6, by + 4));
     }
 
     FormattedText Text(string s, Brush brush, double size, double dip) =>
-        new(s, Culture ?? CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface("Segoe UI"), size, brush, dip);
+        new(s, Culture ?? CultureInfo.InvariantCulture, FlowDirection.LeftToRight, UiFont, size, brush, dip);
 
     void DrawText(DrawingContext dc, string s, Point anchor, Brush brush, double size, double dip, TextAlignment align)
     {
@@ -298,6 +333,26 @@ public sealed class PowerGraph : FrameworkElement
             _ => anchor.X,
         };
         dc.DrawText(ft, new Point(x, anchor.Y - (ft.Height / 2)));
+    }
+
+    /// <summary>
+    /// Returns the cached pen while it still uses <paramref name="brush"/>; otherwise builds a new one. The pen is frozen
+    /// only when the brush already is, so a caller's mutable brush is never frozen behind its back.
+    /// </summary>
+    static Pen CachedPen(ref Pen? cache, Brush brush, double thickness, DashStyle? dash, PenLineJoin join = PenLineJoin.Miter)
+    {
+        if (cache != null && ReferenceEquals(cache.Brush, brush)) return cache;
+        var pen = new Pen(brush, thickness) { LineJoin = join };
+        if (dash != null) pen.DashStyle = dash;
+        if (brush == null || brush.IsFrozen) pen.Freeze();
+        cache = pen;
+        return pen;
+    }
+
+    static DashStyle Frozen(DashStyle d)
+    {
+        d.Freeze();
+        return d;
     }
 
     static double RoundUp(double v, double step) => Math.Ceiling(v / step) * step;

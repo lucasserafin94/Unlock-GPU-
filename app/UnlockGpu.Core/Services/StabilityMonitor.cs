@@ -39,7 +39,7 @@ public sealed class StabilityMonitor : IStabilityMonitor
     IReadOnlyList<SystemEventRecord> _systemEvents = [];
     DateTimeOffset _lastEventPoll = DateTimeOffset.MinValue;
     bool _eventErrorLogged;
-    HealthReport _current = new(Health.Good, []);
+    volatile HealthReport _current = new(Health.Good, []);
 
     /// <summary>Creates the monitor; "since app start" is the moment of construction.</summary>
     /// <param name="log">Log.</param>
@@ -55,7 +55,8 @@ public sealed class StabilityMonitor : IStabilityMonitor
     }
 
     /// <inheritdoc/>
-    public HealthReport Current { get { lock (_gate) return _current; } }
+    /// <remarks>Leitura sem lock (campo volatile); escrito so sob <c>_gate</c> em <c>Recompute</c>.</remarks>
+    public HealthReport Current => _current;
 
     /// <inheritdoc/>
     public event EventHandler<HealthReport>? Changed;
@@ -64,7 +65,8 @@ public sealed class StabilityMonitor : IStabilityMonitor
     public void Feed(GpuSample sample)
     {
         ArgumentNullException.ThrowIfNull(sample);
-        HealthReport? changed;
+        HealthReport? changed = null;
+        bool poll;
         lock (_gate)
         {
             if (sample.Ok)
@@ -73,8 +75,21 @@ public sealed class StabilityMonitor : IStabilityMonitor
                 _throttleStreak = load && ClockReasonText.CostsPerformance(sample.Reasons) ? _throttleStreak + 1 : 0;
                 _tempC = sample.TempC;
             }
-            if (_time.GetUtcNow() - _lastEventPoll >= EventPollInterval) PollEvents();
-            changed = Recompute();
+            // decide sob o lock e marca o instante, para que so uma thread faca a consulta
+            var now = _time.GetUtcNow();
+            poll = now - _lastEventPoll >= EventPollInterval;
+            if (poll) _lastEventPoll = now;
+            else changed = Recompute();
+        }
+        if (poll)
+        {
+            // consulta ao event log (wevtapi) fora do lock: nao bloqueia Current / ReportBenchmarkDrop
+            var events = QueryEvents();
+            lock (_gate)
+            {
+                StoreEvents(events);
+                changed = Recompute();
+            }
         }
         if (changed != null) Changed?.Invoke(this, changed);
     }
@@ -94,11 +109,13 @@ public sealed class StabilityMonitor : IStabilityMonitor
     /// <inheritdoc/>
     public IReadOnlyList<string> RecentSystemEvents()
     {
+        lock (_gate) _lastEventPoll = _time.GetUtcNow();
+        var queried = QueryEvents();
         HealthReport? changed;
         IReadOnlyList<SystemEventRecord> events;
         lock (_gate)
         {
-            PollEvents();
+            StoreEvents(queried);
             events = _systemEvents;
             changed = Recompute();
         }
@@ -107,19 +124,32 @@ public sealed class StabilityMonitor : IStabilityMonitor
             $"{e.TimeUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}  {e.Provider}  {e.EventId}")).ToArray();
     }
 
-    void PollEvents()
+    /// <summary>Consulta o System log sem segurar <c>_gate</c>; null em caso de erro (logado uma vez).</summary>
+    IReadOnlyList<SystemEventRecord>? QueryEvents()
     {
-        _lastEventPoll = _time.GetUtcNow();
         try
         {
-            _systemEvents = _events.Query(_sinceUtc);
-            _eventErrorLogged = false;
+            return _events.Query(_sinceUtc);
         }
         catch (Exception e) when (e is Win32Exception or UnauthorizedAccessException or InvalidOperationException or DllNotFoundException)
         {
-            if (!_eventErrorLogged) _log.Error("STABILITY event log query", e);
-            _eventErrorLogged = true;
+            bool first;
+            lock (_gate)
+            {
+                first = !_eventErrorLogged;
+                _eventErrorLogged = true;
+            }
+            if (first) _log.Error("STABILITY event log query", e);
+            return null;
         }
+    }
+
+    /// <summary>Guarda o resultado da consulta; chamar sob <c>_gate</c>.</summary>
+    void StoreEvents(IReadOnlyList<SystemEventRecord>? events)
+    {
+        if (events == null) return;
+        _systemEvents = events;
+        _eventErrorLogged = false;
     }
 
     HealthReport? Recompute()

@@ -79,42 +79,49 @@ public sealed class PowerService : IPowerService
     public ApplyResult Apply(double watts)
     {
         string requested = string.Create(CultureInfo.InvariantCulture, $"{watts:0.#} W");
-        if (_writeGate?.IsBlocked == true) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
-        var info = _gpu.Info;
-        if (info is null) return ApplyError.Fail(requested, ServiceTextKeys.GpuUnavailable, _gpu.LastError);
-        if (double.IsNaN(watts) || watts <= 0
-            || (!double.IsNaN(info.MinLimitW) && watts < info.MinLimitW)
-            || (!double.IsNaN(info.MaxLimitW) && watts > info.MaxLimitW))
+        if (_writeGate?.TryBeginWrite() == false) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
+        try
         {
-            string range = string.Create(CultureInfo.InvariantCulture, $"{info.MinLimitW:0.#}..{info.MaxLimitW:0.#} W");
-            return ApplyError.Fail(requested, ServiceTextKeys.PowerOutOfRange, range);
-        }
-        if (Probe() == PowerSupport.NotSupported)
-            return ApplyError.Fail(requested, ServiceTextKeys.PowerNotSupported);
+            var info = _gpu.Info;
+            if (info is null) return ApplyError.Fail(requested, ServiceTextKeys.GpuUnavailable, _gpu.LastError);
+            if (double.IsNaN(watts) || watts <= 0
+                || (!double.IsNaN(info.MinLimitW) && watts < info.MinLimitW)
+                || (!double.IsNaN(info.MaxLimitW) && watts > info.MaxLimitW))
+            {
+                string range = string.Create(CultureInfo.InvariantCulture, $"{info.MinLimitW:0.#}..{info.MaxLimitW:0.#} W");
+                return ApplyError.Fail(requested, ServiceTextKeys.PowerOutOfRange, range);
+            }
+            if (Probe() == PowerSupport.NotSupported)
+                return ApplyError.Fail(requested, ServiceTextKeys.PowerNotSupported);
 
-        lock (_gate)
+            lock (_gate)
+            {
+                int rc = _gpu.SetPowerLimitW(watts);
+                // Le de volta o limite configurado (o que foi gravado); o aplicado pode estar mais baixo por um corte
+                // temporario e daria falso erro de leitura.
+                double back = _gpu.ConfiguredLimitW();
+                if (double.IsNaN(back)) back = _gpu.EnforcedLimitW();
+                string readBack = double.IsNaN(back) ? "?" : string.Create(CultureInfo.InvariantCulture, $"{back:0.#} W");
+                if (rc == NvmlNotSupported) Remember(PowerSupport.NotSupported, info.Driver, save: true);
+                if (rc != NvmlSuccess)
+                {
+                    string err = _gpu.ErrorText(rc);
+                    _log.Warn($"POWER {requested} refused: {err}");
+                    return ApplyError.Fail(requested, rc == NvmlNotSupported ? ServiceTextKeys.PowerNotSupported : ServiceTextKeys.PowerDriver, err, readBack);
+                }
+                if (_support == PowerSupport.Unknown) Remember(PowerSupport.Adjustable, info.Driver, save: true);
+                if (double.IsNaN(back) || Math.Abs(back - watts) > ReadBackToleranceW)
+                {
+                    _log.Warn($"POWER {requested} read back {readBack}");
+                    return ApplyError.Fail(requested, ServiceTextKeys.PowerReadBack, readBack, readBack);
+                }
+                _log.Info($"POWER {requested} ok");
+                return new ApplyResult(true, requested, readBack);
+            }
+        }
+        finally
         {
-            int rc = _gpu.SetPowerLimitW(watts);
-            // Le de volta o limite configurado (o que foi gravado); o aplicado pode estar mais baixo por um corte
-            // temporario e daria falso erro de leitura.
-            double back = _gpu.ConfiguredLimitW();
-            if (double.IsNaN(back)) back = _gpu.EnforcedLimitW();
-            string readBack = double.IsNaN(back) ? "?" : string.Create(CultureInfo.InvariantCulture, $"{back:0.#} W");
-            if (rc == NvmlNotSupported) Remember(PowerSupport.NotSupported, info.Driver, save: true);
-            if (rc != NvmlSuccess)
-            {
-                string err = _gpu.ErrorText(rc);
-                _log.Warn($"POWER {requested} refused: {err}");
-                return ApplyError.Fail(requested, rc == NvmlNotSupported ? ServiceTextKeys.PowerNotSupported : ServiceTextKeys.PowerDriver, err, readBack);
-            }
-            if (_support == PowerSupport.Unknown) Remember(PowerSupport.Adjustable, info.Driver, save: true);
-            if (double.IsNaN(back) || Math.Abs(back - watts) > ReadBackToleranceW)
-            {
-                _log.Warn($"POWER {requested} read back {readBack}");
-                return ApplyError.Fail(requested, ServiceTextKeys.PowerReadBack, readBack, readBack);
-            }
-            _log.Info($"POWER {requested} ok");
-            return new ApplyResult(true, requested, readBack);
+            _writeGate?.EndWrite();
         }
     }
 

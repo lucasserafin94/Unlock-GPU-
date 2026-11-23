@@ -90,15 +90,31 @@ public sealed class BackupService : IBackupService
                     !entry.FullName.EndsWith(".json", StringComparison.OrdinalIgnoreCase)) continue;
                 if (profiles.Count >= MaxProfiles) throw Invalid("too many profiles");
                 var p = Read<Profile>(entry);
-                if (p != null && !string.IsNullOrWhiteSpace(p.Name)) profiles.Add(p);
+                if (p == null) continue;
+                // Valida o nome antes de gravar qualquer coisa: um nome ruim nao pode deixar restauracao parcial.
+                try { _ = ProfileStore.FileNameFor(p.Name); }
+                catch (ArgumentException) { throw Invalid(entry.FullName + " invalid profile name"); }
+                profiles.Add(p);
             }
         }
         catch (JsonException e) { throw new InvalidDataException(ApplyError.Compose(ServiceTextKeys.BackupInvalid, e.Message), e); }
 
         // Validated fully before writing anything.
-        if (settings != null) _settings.Save(settings);
+        if (settings != null) _settings.Save(KeepLocalStartup(settings, _settings.Current));
         foreach (var p in profiles) _profiles.Save(p);
     }
+
+    /// <summary>
+    /// Os campos de inicializacao sao locais da maquina: a tarefa agendada nao e alterada pelo import, entao eles
+    /// continuam vindo das configuracoes atuais.
+    /// </summary>
+    static AppSettings KeepLocalStartup(AppSettings imported, AppSettings current) => imported with
+    {
+        StartWithWindows = current.StartWithWindows,
+        StartupProfile = current.StartupProfile,
+        ApplyProfileAtStartup = current.ApplyProfileAtStartup,
+        StartInTray = current.StartInTray,
+    };
 
     static InvalidDataException Invalid(string detail) => new(ApplyError.Compose(ServiceTextKeys.BackupInvalid, detail));
 

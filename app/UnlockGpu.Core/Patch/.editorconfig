@@ -1,0 +1,17 @@
+# Patch kit: arquivos C# 5-safe (compativeis com PowerShell 5.1 Add-Type e .NET moderno).
+# O estilo antigo (campos publicos, nulls explicitos, nomes com underline) e intencional;
+# as regras abaixo so valem para esta pasta.
+root = false
+
+[*.cs]
+dotnet_diagnostic.CS8603.severity = none   # retorno de referencia nula possivel (nulls sao verificadas em runtime)
+dotnet_diagnostic.CS8625.severity = none   # literal null para tipo nao anulavel
+dotnet_diagnostic.CS8618.severity = none   # campo nao inicializado (preenchido por out/parametro)
+dotnet_diagnostic.CS8602.severity = none   # dereference possivelmente nula
+dotnet_diagnostic.CS8600.severity = none   # conversao de null para tipo nao anulavel
+dotnet_diagnostic.CS8601.severity = none   # possivel referencia nula em parametro
+dotnet_diagnostic.CA1051.severity = none   # campos publicos (superficie da API do kit)
+dotnet_diagnostic.CA1707.severity = none   # underline em nomes de constantes QI
+dotnet_diagnostic.CA1711.severity = none   # sufixo Delegate nos delegates P/Invoke
+dotnet_diagnostic.CA2101.severity = none   # marshaling explicito em P/Invoke (CharSet ja declarado)
+dotnet_diagnostic.CA1846.severity = none   # Substring vs AsSpan

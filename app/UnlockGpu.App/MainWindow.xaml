@@ -80,6 +80,34 @@
             <!-- footer -->
             <Border Grid.Row="4" Background="{StaticResource TitleBarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="12,6">
                 <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- hardware versus active profile -->
+                    <TextBlock Grid.Column="1" DataContext="{Binding Drift}" Text="{Binding Text}" Margin="14,0,10,0" FontSize="11.5"
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis" ToolTipService.ShowDuration="30000">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TextDimBrush}"/>
+                                <Setter Property="ToolTip" Value="{Binding Text}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDrift}" Value="True">
+                                        <Setter Property="Foreground" Value="{StaticResource WarnBrush}"/>
+                                        <Setter Property="ToolTip" Value="{Binding Detail}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" DataContext="{Binding Drift}" VerticalAlignment="Center">
+                        <Button Content="{l:Tr ui.drift.reset}" Command="{Binding ResetCommand}" ToolTip="{l:Tr ui.drift.resetHint}"
+                                Padding="10,2" MinHeight="0" FontSize="11.5" Margin="0,0,6,0"/>
+                        <Button Content="{l:Tr ui.drift.apply}" Command="{Binding ApplyCommand}" ToolTip="{l:Tr ui.drift.applyHint}"
+                                Style="{StaticResource AccentButton}" Padding="10,2" MinHeight="0" FontSize="11.5"/>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" Background="Transparent" ToolTip="{Binding HealthText}" ToolTipService.ShowDuration="30000">
                         <Ellipse Width="10" Height="10" VerticalAlignment="Center">
                             <Ellipse.Style>
@@ -115,7 +143,7 @@
                             </TextBlock.Style>
                         </TextBlock>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="0,0,10,0" VerticalAlignment="Center"
                                 Visibility="{Binding Sessions.IsRecording, Converter={StaticResource BoolToVis}}">
                         <Ellipse Width="8" Height="8" Fill="{StaticResource DangerBrush}" VerticalAlignment="Center"/>
                         <TextBlock Text="{l:Tr ui.sessions.recording}" FontSize="11.5" Foreground="{StaticResource DangerBrush}" Margin="6,0,0,0"/>

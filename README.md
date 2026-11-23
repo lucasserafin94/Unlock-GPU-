@@ -12,8 +12,8 @@ Monitor e ajustes para GPUs NVIDIA de notebook, com código próprio e só inter
 
 ## Limites de escopo
 
-- Não passa do teto de potência da vBIOS e não usa engenharia reversa do driver da NVIDIA nem de outros programas.
-- Tudo é feito com APIs públicas (NVML, nvidia-smi) e, nas próximas etapas, com interfaces abertas documentadas pelos fabricantes ou por projetos de código aberto.
+- O caminho padrão usa só APIs públicas (NVML, nvidia-smi); nada de registro do driver, vBIOS ou nvflash.
+- Exceção documentada: o kit `app/UnlockGpu.Core/Patch` grava os slots `romOverrideXX` na chave de classe do driver para elevar o teto de potência além da vBIOS. Detalhes em [docs/AUDIT-CONCORRENCIA.md](docs/AUDIT-CONCORRENCIA.md).
 
 ## Estrutura
 

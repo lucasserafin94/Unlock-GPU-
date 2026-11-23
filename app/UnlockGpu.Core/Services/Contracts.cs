@@ -5,7 +5,7 @@ namespace UnlockGpu.Core.Services;
 // ============================================================================================
 // Contratos entre o nucleo e a interface. Cada servico tem uma implementacao em Services/*.cs.
 // Regras de seguranca que valem para todos:
-//  * so APIs publicas (NVML / nvidia-smi); nada de registro do driver, vBIOS ou nvflash;
+//  * so APIs publicas (NVML / nvidia-smi); nada de registro do driver, vBIOS ou nvflash — exceto o kit Patch (romOverride), documentado em docs/AUDIT-CONCORRENCIA.md;
 //  * todo valor aplicado e lido de volta do hardware (ApplyResult);
 //  * faixas sempre vem do driver (nunca constantes fixas);
 //  * textos para o usuario sao CHAVES de traducao (Localizer), nunca texto pronto.
@@ -19,7 +19,9 @@ public sealed record AppSettings
     public int AdapterWatts { get; init; }                  // etiqueta do carregador; 0 = nao informado
     public bool MinimizeToTray { get; init; } = true;
     public bool StartWithWindows { get; init; }
-    public string? StartupProfile { get; init; }            // perfil aplicado ao entrar no Windows
+    public string? StartupProfile { get; init; }            // perfil escolhido para a inicializacao
+    public bool ApplyProfileAtStartup { get; init; } = true; // aplicar StartupProfile ao iniciar com o Windows
+    public bool StartInTray { get; init; } = true;          // iniciar escondido na bandeja e continuar rodando
     public bool ReapplyAfterDriverReset { get; init; } = true;
     public int GraphMinutes { get; init; } = 3;
 }
@@ -145,11 +147,19 @@ public interface IStabilityMonitor
 
 // ---------- inicializacao com o Windows ----------
 
+/// <summary>Como o app inicia com o Windows.</summary>
+/// <param name="StayInTray">true: o app abre escondido na bandeja e continua rodando (monitor, reaplicar apos reinicio
+/// do driver). false: sem perfil abre a janela; com perfil aplica em silencio e fecha.</param>
+/// <param name="ProfileName">Perfil aplicado ao iniciar; null = nao aplicar nada.</param>
+public sealed record StartupOptions(bool StayInTray, string? ProfileName);
+
 public interface IStartupService
 {
     bool IsEnabled { get; }
     /// <summary>Tarefa agendada ao entrar no Windows, elevada, que roda "UnlockGPU.exe --silent --apply-profile &lt;nome&gt;".</summary>
-    void Enable(string profileName);
+    void Enable(string profileName) => Enable(new StartupOptions(false, profileName));
+    /// <summary>Tarefa agendada ao entrar no Windows, elevada (sem pedir UAC), com o modo de <paramref name="options"/>.</summary>
+    void Enable(StartupOptions options);
     void Disable();
 }
 

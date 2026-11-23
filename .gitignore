@@ -1,4 +1,4 @@
-﻿# Saidas locais
+# Saidas locais
 *.log
 tests/out/
 tests/review/
@@ -12,13 +12,13 @@ obj/
 .vs/
 publish/
 
-# Capturas locais de outras ferramentas (fora do escopo do app)
-config/
-# Kit de patch de registro do driver (romOverride): fora do escopo do Unlock GPU, nao versionar
+# Capturas locais de outras ferramentas (fora do escopo do app) — exceto a captura romOverride, que e a tabela de config da placa
+config/*
+!config/romoverride-capture.txt
+# Kit legado standalone (versao nao compilada no .NET; o kit ativo esta em app/UnlockGpu.Core/Patch)
 src/GpuHotRestart.cs
 src/NvApiPrivate.cs
 src/RailCurrents.cs
 src/RomSlot.cs
 tools/capture-romoverride.ps1
 dist/
-app/UnlockGpu.Core/Patch/

@@ -8,6 +8,10 @@ public sealed record GpuSample
     public uint CoreMHz { get; init; }
     public uint SmMHz { get; init; }
     public uint MemMHz { get; init; }
+    /// <summary>Offset de nucleo lido pelo monitor nesta amostra (null = nao lido).</summary>
+    public int? CoreOffsetMHz { get; init; }
+    /// <summary>Offset de memoria lido pelo monitor nesta amostra (null = nao lido).</summary>
+    public int? MemOffsetMHz { get; init; }
     public double PowerW { get; init; } = double.NaN;
     public double LimitW { get; init; } = double.NaN;
     public uint TempC { get; init; }

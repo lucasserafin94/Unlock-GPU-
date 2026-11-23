@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Text.Json;
 using System.Xml.Linq;
 using UnlockGpu.Core.Infrastructure;
 using UnlockGpu.Core.Model;
@@ -109,7 +110,29 @@ public sealed class StartupServiceTests
         Check.Throws<ArgumentException>(() => _svc.BuildTaskXml("a\"b"));
         Check.Throws<ArgumentException>(() => _svc.BuildTaskXml(" "));
         Check.Throws<ArgumentException>(() => _svc.BuildTaskXml("a\nb"));
+        Check.Throws<ArgumentException>(() => _svc.BuildTaskXml("perfil\\"));
+        Check.Throws<ArgumentException>(() => StartupService.BuildArguments(new StartupOptions(true, "x\\")));
     }
+
+    [Test]
+    public void Arguments_PerMode()
+    {
+        Check.Equal("--minimized --apply-profile \"x\"", StartupService.BuildArguments(new StartupOptions(true, "x")));
+        Check.Equal("--minimized", StartupService.BuildArguments(new StartupOptions(true, null)));
+        Check.Equal("--silent --apply-profile \"x\"", StartupService.BuildArguments(new StartupOptions(false, "x")));
+        Check.Equal("", StartupService.BuildArguments(new StartupOptions(false, null)));
+    }
+
+    [Test]
+    public void Xml_ExecutionTimeLimit_PerMode()
+    {
+        Check.Equal("PT0S", TimeLimit(_svc.BuildTaskXml(new StartupOptions(true, "x"))));
+        Check.Equal("PT0S", TimeLimit(_svc.BuildTaskXml(new StartupOptions(true, null))));
+        Check.Equal("PT5M", TimeLimit(_svc.BuildTaskXml(new StartupOptions(false, "x"))));
+    }
+
+    static string TimeLimit(string xml) =>
+        XDocument.Parse(xml).Root!.Element(Ns + "Settings")!.Element(Ns + "ExecutionTimeLimit")!.Value;
 }
 
 public sealed class ProfileApplierTests : TempDirTest
@@ -217,5 +240,59 @@ public sealed class BackupServiceTests : TempDirTest
         var applier = new ProfileApplier(gpu, new OffsetService(gpu, Log), new VramLockService(gpu, Paths, Log), new PowerService(gpu, Paths, Log), Log);
         var e = Check.Throws<InvalidDataException>(() => new BackupService(Paths, settings, profiles, applier).Import(zip));
         Check.Equal(ServiceTextKeys.BackupInvalid, ApplyError.Split(e.Message).Key);
+    }
+
+    ProfileApplier NewApplier()
+    {
+        var gpu = new FakeGpu();
+        return new ProfileApplier(gpu, new OffsetService(gpu, Log), new VramLockService(gpu, Paths, Log), new PowerService(gpu, Paths, Log), Log);
+    }
+
+    [Test]
+    public void Import_BadProfileName_WritesNothing()
+    {
+        var applier = NewApplier();
+        var settings = new SettingsStore(Paths);
+        var profiles = new ProfileStore(Paths);
+        settings.Save(settings.Current with { Language = "pt" });
+        profiles.Save(new Profile { Name = "Bom", CoreOffsetMHz = 50 });
+        string zip = new BackupService(Paths, settings, profiles, applier).Export(Path.Combine(Root, "out", "backup.zip"));
+        using (var z = ZipFile.Open(zip, ZipArchiveMode.Update))
+        using (var s = z.CreateEntry("profiles/zz-bad.json").Open())
+            JsonSerializer.Serialize(s, new Profile { Name = "a\nb", CoreOffsetMHz = 10 }, JsonStore.Options);
+
+        var other = new AppPaths(Path.Combine(Root, "restore"));
+        var settings2 = new SettingsStore(other);
+        var profiles2 = new ProfileStore(other);
+        var e = Check.Throws<InvalidDataException>(() => new BackupService(other, settings2, profiles2, applier).Import(zip));
+        Check.Equal(ServiceTextKeys.BackupInvalid, ApplyError.Split(e.Message).Key);
+        Check.Equal(0, profiles2.List().Count);
+        Check.Equal(new AppSettings(), new SettingsStore(other).Current);
+    }
+
+    [Test]
+    public void Import_KeepsLocalStartupFields()
+    {
+        var applier = NewApplier();
+        var settings = new SettingsStore(Paths);
+        settings.Save(settings.Current with
+        {
+            Language = "pt", StartWithWindows = true, StartupProfile = "Origem", ApplyProfileAtStartup = false, StartInTray = false,
+        });
+        string zip = new BackupService(Paths, settings, new ProfileStore(Paths), applier).Export(Path.Combine(Root, "out", "backup.zip"));
+
+        var other = new AppPaths(Path.Combine(Root, "restore"));
+        var settings2 = new SettingsStore(other);
+        settings2.Save(settings2.Current with
+        {
+            Language = "en", StartWithWindows = false, StartupProfile = "Local", ApplyProfileAtStartup = true, StartInTray = true,
+        });
+        new BackupService(other, settings2, new ProfileStore(other), applier).Import(zip);
+        var result = new SettingsStore(other).Current;
+        Check.Equal("pt", result.Language);
+        Check.False(result.StartWithWindows);
+        Check.Equal("Local", result.StartupProfile);
+        Check.True(result.ApplyProfileAtStartup);
+        Check.True(result.StartInTray);
     }
 }

@@ -55,6 +55,8 @@ public sealed class MonitorViewModel : TabViewModel
     readonly TileViewModel _temp = new("ui.tile.temp");
     readonly TileViewModel _util = new("ui.tile.util");
     SampleContext? _last;
+    // Ultima info nao nula vinda das amostras (lida na thread do monitor).
+    GpuInfo? _info;
     ClockReasons? _chipReasons;
     IReadOnlyList<GpuSample> _graphSamples = [];
     int _graphMinutes;
@@ -126,6 +128,7 @@ public sealed class MonitorViewModel : TabViewModel
     {
         ArgumentNullException.ThrowIfNull(context);
         _last = context;
+        if (context.Info != null) _info = context.Info;
         GraphSamples = context.History;
         var s = context.Sample;
         var c = L.Culture;
@@ -139,7 +142,7 @@ public sealed class MonitorViewModel : TabViewModel
 
         _core.Value = Format.Number(s.CoreMHz, c);
         _core.Unit = "MHz";
-        uint maxCore = _gpu.Info?.MaxCoreMHz ?? 0;
+        uint maxCore = _info?.MaxCoreMHz ?? 0;
         _core.Sub = maxCore > 0 ? L.T("ui.tile.core.sub", ("max", Format.Number(maxCore, c))) : "";
 
         _sm.Value = Format.Number(s.SmMHz, c);

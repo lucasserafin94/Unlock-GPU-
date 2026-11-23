@@ -73,8 +73,9 @@ public partial class MainWindow : Window
         base.OnClosing(e);
         if (_closingForExit) return;
         // Alt+F4 and the close button both go through the app's orderly shutdown.
+        // Chamar Close() dentro de OnClosing lanca InvalidOperationException: adia o desligamento.
         e.Cancel = true;
-        _exit();
+        Dispatcher.BeginInvoke(_exit);
     }
 
     void OnMinimizeClick(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;

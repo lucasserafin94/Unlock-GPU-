@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using UnlockGpu.Core.Model;
+using UnlockGpu.Core.Services;
 
 namespace UnlockGpu.Core.Nvml;
 
@@ -24,12 +25,23 @@ public interface IGpu : IDisposable
 
 /// <summary>Implementacao real sobre nvml.dll. Todas as chamadas sao serializadas (a NVML aceita multithread,
 /// mas o reabrir apos reinicio do driver nao pode correr em paralelo).</summary>
-public sealed class NvmlGpu : IGpu
+public sealed class NvmlGpu : IGpu, IGpuInitGeneration
 {
     readonly Lock _gate = new();
     IntPtr _dev;
     bool _init;
     GpuInfo? _info;
+    // nvmlDeviceGet/SetClockOffsets so existem no driver 555+; em drivers antigos a entrada falta na dll
+    bool _noOffsetApi;
+    // nvmlDeviceGetCurrentClocksEventReasons e mais novo; ThrottleReasons e o nome antigo (depreciado)
+    bool _noEventReasonsApi, _noThrottleReasonsApi;
+    // Inits bem-sucedidos depois do primeiro (0 = so o init inicial), para o primeiro init nao parecer reset
+    int _generation;
+    bool _everInit;
+
+    /// <summary>Counts NVML re-initialisations after the first one (0 until the library had to be re-opened), so
+    /// <see cref="GpuMonitor"/> only sees a change after a real driver reset.</summary>
+    public int InitGeneration { get { lock (_gate) return _generation; } }
 
     public bool IsAvailable { get { lock (_gate) return EnsureInit(); } }
     public string LastError { get; private set; } = "";
@@ -45,6 +57,8 @@ public sealed class NvmlGpu : IGpu
             rc = NvmlNative.GetHandleByIndex(0, out _dev);
             if (rc != NvmlNative.Success) { LastError = "GetHandle: " + ErrorTextUnsafe(rc); _ = NvmlNative.Shutdown(); return false; }
             _init = true; LastError = "";
+            if (_everInit) _generation++;
+            _everInit = true;
             return true;
         }
         catch (DllNotFoundException) { LastError = "nvml.dll not found (NVIDIA driver missing)"; return false; }
@@ -89,9 +103,7 @@ public sealed class NvmlGpu : IGpu
                 int rp = NvmlNative.GetPowerUsage(_dev, out uint mw);
                 if (rp != 0 && attempt == 0 && NvmlNative.NeedsReinit(rp)) { Reinit(); continue; }
                 int rm = NvmlNative.GetClockInfo(_dev, NvmlNative.ClockMem, out uint mem);
-                ulong reasons;
-                try { if (NvmlNative.GetEventReasons(_dev, out reasons) != 0) reasons = 0; }
-                catch (EntryPointNotFoundException) { if (NvmlNative.GetThrottleReasons(_dev, out reasons) != 0) reasons = 0; }
+                ulong reasons = ReadReasons();
                 NvmlNative.Memory vm = default;
                 bool memOk = NvmlNative.GetMemoryInfo(_dev, out vm) == 0;
                 NvmlNative.Utilization u = default;
@@ -119,6 +131,20 @@ public sealed class NvmlGpu : IGpu
         }
     }
 
+    /// <summary>ClocksEventReasons (driver novo) com fallback para ThrottleReasons (driver antigo); 0 se nenhum existir.</summary>
+    ulong ReadReasons()
+    {
+        ulong reasons;
+        if (!_noEventReasonsApi)
+        {
+            try { return NvmlNative.GetEventReasons(_dev, out reasons) == 0 ? reasons : 0; }
+            catch (EntryPointNotFoundException) { _noEventReasonsApi = true; }
+        }
+        if (_noThrottleReasonsApi) return 0;
+        try { return NvmlNative.GetThrottleReasons(_dev, out reasons) == 0 ? reasons : 0; }
+        catch (EntryPointNotFoundException) { _noThrottleReasonsApi = true; return 0; }
+    }
+
     public double EnforcedLimitW()
     {
         lock (_gate) return EnsureInit() && NvmlNative.GetEnforcedPowerLimit(_dev, out uint v) == 0 ? v / 1000.0 : double.NaN;
@@ -133,9 +159,13 @@ public sealed class NvmlGpu : IGpu
     int Write(Func<IntPtr, int> call)
     {
         if (!EnsureInit()) return -1;
-        int rc = call(_dev);
-        if (NvmlNative.NeedsReinit(rc)) { Reinit(); if (!EnsureInit()) return -1; rc = call(_dev); }
-        return rc;
+        try
+        {
+            int rc = call(_dev);
+            if (NvmlNative.NeedsReinit(rc)) { Reinit(); if (!EnsureInit()) return -1; rc = call(_dev); }
+            return rc;
+        }
+        catch (EntryPointNotFoundException e) { LastError = e.Message; return NvmlNative.ErrorNotSupported; }
     }
 
     public int SetPowerLimitW(double watts)
@@ -149,9 +179,10 @@ public sealed class NvmlGpu : IGpu
     {
         lock (_gate)
         {
-            if (!EnsureInit()) return null;
+            if (_noOffsetApi || !EnsureInit()) return null;
             var o = new NvmlNative.ClockOffset { Version = NvmlNative.ClockOffsetVersion, Type = (int)domain, PState = 0 };
-            return NvmlNative.GetClockOffsets(_dev, ref o) == 0 ? new OffsetInfo(o.OffsetMHz, o.MinMHz, o.MaxMHz) : null;
+            try { return NvmlNative.GetClockOffsets(_dev, ref o) == 0 ? new OffsetInfo(o.OffsetMHz, o.MinMHz, o.MaxMHz) : null; }
+            catch (EntryPointNotFoundException) { _noOffsetApi = true; LastError = "Clock offsets need NVIDIA driver 555 or newer"; return null; }
         }
     }
 
@@ -159,10 +190,12 @@ public sealed class NvmlGpu : IGpu
     {
         lock (_gate)
         {
+            if (_noOffsetApi) return NvmlNative.ErrorNotSupported;
             return Write(d =>
             {
                 var o = new NvmlNative.ClockOffset { Version = NvmlNative.ClockOffsetVersion, Type = (int)domain, PState = 0, OffsetMHz = mhz };
-                return NvmlNative.SetClockOffsets(d, ref o);
+                try { return NvmlNative.SetClockOffsets(d, ref o); }
+                catch (EntryPointNotFoundException) { _noOffsetApi = true; LastError = "Clock offsets need NVIDIA driver 555 or newer"; return NvmlNative.ErrorNotSupported; }
             });
         }
     }

@@ -61,51 +61,65 @@ public sealed class VramLockService : IVramLockService
     public ApplyResult Lock(uint levelMHz)
     {
         string requested = Mhz(levelMHz);
-        if (_writeGate?.IsBlocked == true) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
-        var levels = Levels;
-        if (levels.Count == 0) return ApplyError.Fail(requested, ServiceTextKeys.VramNoLevels, _gpu.LastError);
-        if (!levels.Contains(levelMHz))
-            return ApplyError.Fail(requested, ServiceTextKeys.VramInvalidLevel, string.Join("/", levels.Select(Mhz)));
-
-        lock (_gate)
+        if (_writeGate?.TryBeginWrite() == false) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
+        try
         {
-            int rc = _gpu.LockMemoryClock(levelMHz);
-            if (rc != 0)
+            var levels = Levels;
+            if (levels.Count == 0) return ApplyError.Fail(requested, ServiceTextKeys.VramNoLevels, _gpu.LastError);
+            if (!levels.Contains(levelMHz))
+                return ApplyError.Fail(requested, ServiceTextKeys.VramInvalidLevel, string.Join("/", levels.Select(Mhz)));
+
+            lock (_gate)
             {
-                string err = _gpu.ErrorText(rc);
-                _log.Warn($"LOCK {requested} refused: {err}");
-                return ApplyError.Fail(requested, ServiceTextKeys.VramDriver, err);
+                int rc = _gpu.LockMemoryClock(levelMHz);
+                if (rc != 0)
+                {
+                    string err = _gpu.ErrorText(rc);
+                    _log.Warn($"LOCK {requested} refused: {err}");
+                    return ApplyError.Fail(requested, ServiceTextKeys.VramDriver, err);
+                }
+                SaveState(true, levelMHz);
+                _lastDetected = new Detection(levelMHz, null);
+                _lockedAt = _time.GetUtcNow();
+                var s = _gpu.Sample();
+                string readBack = s.Ok ? string.Create(CultureInfo.InvariantCulture, $"{s.MemMHz} MHz ({s.PState})") : "?";
+                _log.Info($"LOCK {requested} ok, now {readBack}");
+                return new ApplyResult(true, requested, readBack);
             }
-            SaveState(true, levelMHz);
-            _lastDetected = new Detection(levelMHz, null);
-            _lockedAt = _time.GetUtcNow();
-            var s = _gpu.Sample();
-            string readBack = s.Ok ? string.Create(CultureInfo.InvariantCulture, $"{s.MemMHz} MHz ({s.PState})") : "?";
-            _log.Info($"LOCK {requested} ok, now {readBack}");
-            return new ApplyResult(true, requested, readBack);
+        }
+        finally
+        {
+            _writeGate?.EndWrite();
         }
     }
 
     /// <inheritdoc/>
     public ApplyResult Unlock()
     {
-        if (_writeGate?.IsBlocked == true) return ApplyError.Fail("unlock", ServiceTextKeys.TunerBusy);
-        const string requested = "auto";
-        lock (_gate)
+        if (_writeGate?.TryBeginWrite() == false) return ApplyError.Fail("unlock", ServiceTextKeys.TunerBusy);
+        try
         {
-            int rc = _gpu.ResetMemoryClock();
-            if (rc != 0)
+            const string requested = "auto";
+            lock (_gate)
             {
-                string err = _gpu.ErrorText(rc);
-                _log.Warn($"UNLOCK refused: {err}");
-                return ApplyError.Fail(requested, ServiceTextKeys.VramDriver, err);
+                int rc = _gpu.ResetMemoryClock();
+                if (rc != 0)
+                {
+                    string err = _gpu.ErrorText(rc);
+                    _log.Warn($"UNLOCK refused: {err}");
+                    return ApplyError.Fail(requested, ServiceTextKeys.VramDriver, err);
+                }
+                SaveState(false, null);
+                _lastDetected = null;
+                _idleLockedSeen = 0;
+                _lockedAt = null;
+                _log.Info("UNLOCK ok");
+                return new ApplyResult(true, requested, "auto");
             }
-            SaveState(false, null);
-            _lastDetected = null;
-            _idleLockedSeen = 0;
-            _lockedAt = null;
-            _log.Info("UNLOCK ok");
-            return new ApplyResult(true, requested, "auto");
+        }
+        finally
+        {
+            _writeGate?.EndWrite();
         }
     }
 

@@ -51,4 +51,42 @@ public sealed class WriteGateTests
         }
         Check.False(gate.TunerActive);
     }
+
+    [Test]
+    public void EnterTuner_WaitsForInFlightWrite_FromAnotherFlow()
+    {
+        var gate = new WriteGate();
+        var writing = new ManualResetEventSlim();
+        var finish = new ManualResetEventSlim();
+        var writer = Task.Run(() =>
+        {
+            Check.True(gate.TryBeginWrite());          // a manual write already in progress
+            writing.Set();
+            finish.Wait(TimeSpan.FromSeconds(5));
+            gate.EndWrite();
+        });
+        Check.True(writing.Wait(TimeSpan.FromSeconds(5)));
+
+        var entered = new ManualResetEventSlim();
+        var tuner = Task.Run(() =>
+        {
+            using (gate.EnterTuner())
+            {
+                entered.Set();
+                Check.True(gate.TryBeginWrite());      // the tuner's own writes are not blocked
+                gate.EndWrite();
+            }
+        });
+
+        Check.False(entered.Wait(TimeSpan.FromMilliseconds(300)));   // still waiting for the manual write
+        Check.True(gate.TunerActive);
+        Check.False(gate.TryBeginWrite());             // new writes from other flows are refused meanwhile
+
+        finish.Set();
+        Check.True(writer.Wait(TimeSpan.FromSeconds(5)));
+        Check.True(entered.Wait(TimeSpan.FromSeconds(5)));
+        Check.True(tuner.Wait(TimeSpan.FromSeconds(5)));
+        Check.Equal(0, gate.InFlightWrites);
+        Check.False(gate.TunerActive);
+    }
 }

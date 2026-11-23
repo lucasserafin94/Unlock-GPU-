@@ -3,6 +3,7 @@ using UnlockGpu.Core.Bench;
 using UnlockGpu.Core.Infrastructure;
 using UnlockGpu.Core.Nvml;
 using UnlockGpu.Core.Oem;
+using UnlockGpu.Patch;
 using UnlockGpu.Core.Services;
 
 namespace UnlockGpu.App.Hosting;
@@ -36,6 +37,7 @@ public sealed class AppServices : IDisposable
         Offsets = new OffsetService(_gpu, log, Tracker, WriteGate);
         Vram = new VramLockService(_gpu, paths, log, gate: WriteGate);
         Power = new PowerService(_gpu, paths, log, WriteGate);
+        RomOverride = new RomOverrideService(_gpu, log, WriteGate);
         Applier = new ProfileApplier(_gpu, Offsets, Vram, Power, log);
         Profiles = new ProfileStore(paths);
         _monitor = new GpuMonitor(_gpu, log, Tracker);
@@ -66,6 +68,8 @@ public sealed class AppServices : IDisposable
     public IVramLockService Vram { get; }
     /// <summary>Power limit.</summary>
     public IPowerService Power { get; }
+    /// <summary>Persistent power-ceiling override (driver class key + hot restart).</summary>
+    public IRomOverrideService RomOverride { get; }
     /// <summary>Profile applier.</summary>
     public IProfileApplier Applier { get; }
     /// <summary>Profile store.</summary>

@@ -25,8 +25,10 @@ public sealed class SettingsViewModel : TabViewModel
     bool _syncing;
 
     /// <summary>Creates the tab.</summary>
-    public SettingsViewModel(Localizer localizer, ISettingsStore settings, ThemeManager theme, IGpuMonitor monitor) : base(localizer)
+    public SettingsViewModel(Localizer localizer, ISettingsStore settings, ThemeManager theme, IGpuMonitor monitor, StartupViewModel startup) : base(localizer)
     {
+        ArgumentNullException.ThrowIfNull(startup);
+        Startup = startup;
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(theme);
         ArgumentNullException.ThrowIfNull(monitor);
@@ -39,6 +41,9 @@ public sealed class SettingsViewModel : TabViewModel
         SelectAccentCommand = new RelayCommand(p => SetAccent(p as string));
         ApplyCustomAccentCommand = new RelayCommand(() => SetAccent(_customAccent));
     }
+
+    /// <summary>Start with Windows card.</summary>
+    public StartupViewModel Startup { get; }
 
     /// <summary>The 8 languages.</summary>
     public IReadOnlyList<LanguageOption> Languages { get; }
@@ -130,6 +135,7 @@ public sealed class SettingsViewModel : TabViewModel
         if (lang != null && lang != _language) { _language = lang; OnPropertyChanged(nameof(Language)); }
         _syncing = false;
         OnPropertiesChanged(nameof(RefreshSeconds), nameof(GraphMinutes), nameof(MinimizeToTray), nameof(ReapplyAfterDriverReset), nameof(Accent));
+        Startup.OnSettingsChanged();
     }
 
     void SetAccent(string? hex)

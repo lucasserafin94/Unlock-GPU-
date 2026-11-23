@@ -41,6 +41,7 @@ public sealed class AutoTuneViewModel : TabViewModel
     bool _runVramTest = true;
     bool _acknowledged;
     bool _isRunning;
+    bool _applying; // Keep/Discard gravando offsets; bloqueia Run/Keep/Discard ate terminar
     string _statusText = "";
     string _resultSummary = "";
 
@@ -57,10 +58,10 @@ public sealed class AutoTuneViewModel : TabViewModel
         _stability = stability;
         _banner = banner;
         _onError = ex => _banner.Show(ResultText.Exception(L, ex), BannerKind.Error);
-        RunCommand = new AsyncRelayCommand(RunAsync, () => _acknowledged && !_isRunning, _onError);
+        RunCommand = new AsyncRelayCommand(RunAsync, () => _acknowledged && !_isRunning && !_applying, _onError);
         CancelCommand = new RelayCommand(() => _cts?.Cancel(), () => _isRunning);
-        KeepCommand = new AsyncRelayCommand(KeepAsync, () => _result != null && !_isRunning, _onError);
-        DiscardCommand = new AsyncRelayCommand(DiscardAsync, () => _result != null && !_isRunning && _before != null, _onError);
+        KeepCommand = new AsyncRelayCommand(KeepAsync, () => _result != null && !_isRunning && !_applying, _onError);
+        DiscardCommand = new AsyncRelayCommand(DiscardAsync, () => _result != null && !_isRunning && !_applying && _before != null, _onError);
     }
 
     /// <summary>Raised after the offsets changed (so the Tuning tab re-reads them).</summary>
@@ -202,24 +203,48 @@ public sealed class AutoTuneViewModel : TabViewModel
     async Task KeepAsync()
     {
         if (_result == null) return;
+        if (_applying) return;
         var r = _result;
         var target = _resultTarget;
-        var applied = await Task.Run(() =>
+        SetApplying(true);
+        try
         {
-            int core = _offsets.Get(ClockDomain.Core)?.CurrentMHz ?? 0;
-            int mem = _offsets.Get(ClockDomain.Memory)?.CurrentMHz ?? 0;
-            return target == TuneTarget.Core ? _offsets.Apply(r.BestOffsetMHz, mem) : _offsets.Apply(core, r.BestOffsetMHz);
-        }).ConfigureAwait(true);
-        _banner.Show(ResultText.Describe(L, applied), applied.Ok ? BannerKind.Success : BannerKind.Error);
-        ClearResult();
+            var applied = await Task.Run(() =>
+            {
+                int core = _offsets.Get(ClockDomain.Core)?.CurrentMHz ?? 0;
+                int mem = _offsets.Get(ClockDomain.Memory)?.CurrentMHz ?? 0;
+                return target == TuneTarget.Core ? _offsets.Apply(r.BestOffsetMHz, mem) : _offsets.Apply(core, r.BestOffsetMHz);
+            }).ConfigureAwait(true);
+            _banner.Show(ResultText.Describe(L, applied), applied.Ok ? BannerKind.Success : BannerKind.Error);
+            ClearResult();
+        }
+        finally
+        {
+            SetApplying(false);
+        }
     }
 
     async Task DiscardAsync()
     {
+        if (_applying) return;
         if (_before is not (int core, int mem)) return;
-        var applied = await Task.Run(() => _offsets.Apply(core, mem)).ConfigureAwait(true);
-        _banner.Show(ResultText.Describe(L, applied), applied.Ok ? BannerKind.Success : BannerKind.Error);
-        ClearResult();
+        SetApplying(true);
+        try
+        {
+            var applied = await Task.Run(() => _offsets.Apply(core, mem)).ConfigureAwait(true);
+            _banner.Show(ResultText.Describe(L, applied), applied.Ok ? BannerKind.Success : BannerKind.Error);
+            ClearResult();
+        }
+        finally
+        {
+            SetApplying(false);
+        }
+    }
+
+    void SetApplying(bool value)
+    {
+        _applying = value;
+        RaiseAll();
     }
 
     void ClearResult()

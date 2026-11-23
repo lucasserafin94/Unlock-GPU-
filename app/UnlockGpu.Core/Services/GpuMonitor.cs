@@ -133,7 +133,8 @@ public sealed class GpuMonitor : IGpuMonitor
         lock (_pollGate)
         {
             sample = _gpu.Sample();
-            resetWhy = DetectReset(sample);
+            resetWhy = DetectReset(sample, out int? core, out int? mem);
+            if (core != null || mem != null) sample = sample with { CoreOffsetMHz = core, MemOffsetMHz = mem };
             lock (_gate)
             {
                 _latest = sample;
@@ -151,8 +152,10 @@ public sealed class GpuMonitor : IGpuMonitor
         return sample;
     }
 
-    string? DetectReset(GpuSample sample)
+    string? DetectReset(GpuSample sample, out int? coreRead, out int? memRead)
     {
+        coreRead = null;
+        memRead = null;
         string? why = null;
         if (_gpu is IGpuInitGeneration g)
         {
@@ -167,11 +170,13 @@ public sealed class GpuMonitor : IGpuMonitor
         {
             if (_gpu.GetOffset(ClockDomain.Core)?.CurrentMHz is int core)
             {
+                coreRead = core;
                 if (_lastCore != 0 && core == 0 && _tracker?.CoreMHz is not 0) why ??= "core offset returned to 0";
                 _lastCore = core;
             }
             if (_gpu.GetOffset(ClockDomain.Memory)?.CurrentMHz is int mem)
             {
+                memRead = mem;
                 if (_lastMem != 0 && mem == 0 && _tracker?.MemMHz is not 0) why ??= "memory offset returned to 0";
                 _lastMem = mem;
             }

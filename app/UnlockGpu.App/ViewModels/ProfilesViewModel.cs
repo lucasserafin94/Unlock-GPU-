@@ -15,14 +15,13 @@ namespace UnlockGpu.App.ViewModels;
 public sealed record ProfileItem(string Name, string Details, string Saved);
 
 /// <summary>
-/// Profiles tab: list, save current, apply, delete, startup profile, start with Windows, backup export/import.
+/// Profiles tab: list, save current, apply, delete, backup export/import (start with Windows lives in the Options tab).
 /// Also the single place that applies a profile by name (tray menu and driver-reset reapply use it).
 /// </summary>
 public sealed class ProfilesViewModel : TabViewModel
 {
     readonly IProfileStore _store;
     readonly IProfileApplier _applier;
-    readonly IStartupService _startup;
     readonly IBackupService _backup;
     readonly ISettingsStore _settings;
     readonly IDialogService _dialogs;
@@ -30,19 +29,14 @@ public sealed class ProfilesViewModel : TabViewModel
     readonly BannerViewModel _banner;
     ProfileItem? _selected;
     string _newName = "";
-    string? _startupProfile;
-    bool _startWithWindows;
-    bool _startupBusy;
-    bool _updating;
 
     /// <summary>Creates the tab.</summary>
-    public ProfilesViewModel(Localizer localizer, IProfileStore store, IProfileApplier applier, IStartupService startup,
+    public ProfilesViewModel(Localizer localizer, IProfileStore store, IProfileApplier applier,
         IBackupService backup, ISettingsStore settings, IDialogService dialogs, UiStateStore uiState, BannerViewModel banner)
         : base(localizer)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(applier);
-        ArgumentNullException.ThrowIfNull(startup);
         ArgumentNullException.ThrowIfNull(backup);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(dialogs);
@@ -50,7 +44,6 @@ public sealed class ProfilesViewModel : TabViewModel
         ArgumentNullException.ThrowIfNull(banner);
         _store = store;
         _applier = applier;
-        _startup = startup;
         _backup = backup;
         _settings = settings;
         _dialogs = dialogs;
@@ -64,8 +57,6 @@ public sealed class ProfilesViewModel : TabViewModel
         ResetDefaultsCommand = new AsyncRelayCommand(ResetToDefaultsAsync, null, OnError);
         ExportBackupCommand = new AsyncRelayCommand(ExportBackupAsync, null, OnError);
         ImportBackupCommand = new AsyncRelayCommand(ImportBackupAsync, null, OnError);
-        _startupProfile = settings.Current.StartupProfile;
-        _startWithWindows = settings.Current.StartWithWindows;
         Refresh();
     }
 
@@ -76,8 +67,8 @@ public sealed class ProfilesViewModel : TabViewModel
     public ObservableCollection<ProfileItem> Profiles { get; } = [];
     /// <summary>True when at least one profile exists.</summary>
     public bool HasProfiles => Profiles.Count > 0;
-    /// <summary>Names for the startup combo.</summary>
-    public ObservableCollection<string> ProfileNames { get; } = [];
+    /// <summary>Raised after the profile list changed (saved, deleted, imported).</summary>
+    public event EventHandler? ProfilesChanged;
 
     /// <summary>Selected profile.</summary>
     public ProfileItem? SelectedProfile
@@ -95,33 +86,6 @@ public sealed class ProfilesViewModel : TabViewModel
     /// <summary>Name for "save current".</summary>
     public string NewName { get => _newName; set { if (SetProperty(ref _newName, value)) SaveCurrentCommand.RaiseCanExecuteChanged(); } }
 
-    /// <summary>Profile applied when Windows starts.</summary>
-    public string? StartupProfile
-    {
-        get => _startupProfile;
-        set
-        {
-            // While the list is rebuilt the combo briefly reports null; keep the stored choice.
-            if (_updating || !SetProperty(ref _startupProfile, value)) return;
-            _settings.Save(_settings.Current with { StartupProfile = value });
-            if (_startWithWindows && value != null) _ = UpdateStartupAsync(true);
-        }
-    }
-
-    /// <summary>Start with Windows (scheduled task that applies the startup profile at logon).</summary>
-    public bool StartWithWindows
-    {
-        get => _startWithWindows;
-        set
-        {
-            if (_startupBusy || !SetProperty(ref _startWithWindows, value) || _updating) return;
-            _ = UpdateStartupAsync(value);
-        }
-    }
-
-    /// <summary>True while the startup task is being changed.</summary>
-    public bool StartupBusy { get => _startupBusy; private set => SetProperty(ref _startupBusy, value); }
-
     /// <summary>Captures the hardware state and saves it under <see cref="NewName"/>.</summary>
     public AsyncRelayCommand SaveCurrentCommand { get; }
     /// <summary>Applies the selected profile.</summary>
@@ -134,25 +98,6 @@ public sealed class ProfilesViewModel : TabViewModel
     public AsyncRelayCommand ExportBackupCommand { get; }
     /// <summary>Imports a backup ZIP (nothing is applied to the GPU).</summary>
     public AsyncRelayCommand ImportBackupCommand { get; }
-
-    /// <summary>Reads the real state of the startup task (background; schtasks query only).</summary>
-    public async Task InitializeAsync()
-    {
-        try
-        {
-            bool enabled = await Task.Run(() => _startup.IsEnabled).ConfigureAwait(true);
-            _updating = true;
-            StartWithWindows = enabled;
-            _updating = false;
-            if (_settings.Current.StartWithWindows != enabled)
-                _settings.Save(_settings.Current with { StartWithWindows = enabled });
-        }
-        catch (Exception ex)
-        {
-            _updating = false;
-            _banner.Show(ResultText.Exception(L, ex), BannerKind.Error);
-        }
-    }
 
     /// <summary>Applies the profile called <paramref name="name"/> in the background and reports the results.</summary>
     /// <returns>The results, or null when the profile does not exist.</returns>
@@ -190,17 +135,6 @@ public sealed class ProfilesViewModel : TabViewModel
     /// <inheritdoc/>
     public override void OnLanguageChanged() => Refresh();
 
-    /// <inheritdoc/>
-    public override void OnSettingsChanged(AppSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-        if (settings.StartupProfile != _startupProfile)
-        {
-            _startupProfile = settings.StartupProfile;
-            OnPropertyChanged(nameof(StartupProfile));
-        }
-    }
-
     async Task SaveCurrentAsync()
     {
         string name = _newName.Trim();
@@ -218,47 +152,7 @@ public sealed class ProfilesViewModel : TabViewModel
         string name = _selected.Name;
         if (!_dialogs.Confirm(L.T("app.name"), L.T("ui.profiles.confirmDelete", ("name", name)))) return;
         _store.Delete(name);
-        if (string.Equals(_startupProfile, name, StringComparison.OrdinalIgnoreCase))
-        {
-            StartupProfile = null;
-            if (_startWithWindows) StartWithWindows = false;
-        }
         Refresh();
-    }
-
-    async Task UpdateStartupAsync(bool enable)
-    {
-        string? profile = _startupProfile;
-        if (enable && string.IsNullOrWhiteSpace(profile))
-        {
-            _banner.Show(L.T("ui.profiles.startupNeedsProfile"), BannerKind.Warning);
-            SetStartWithWindowsSilently(false);
-            return;
-        }
-        StartupBusy = true;
-        try
-        {
-            await Task.Run(() => { if (enable) _startup.Enable(profile!); else _startup.Disable(); }).ConfigureAwait(true);
-            _settings.Save(_settings.Current with { StartWithWindows = enable, StartupProfile = profile });
-            _banner.Show(enable ? L.T("ui.profiles.startupOn", ("name", profile)) : L.T("ui.profiles.startupOff"), BannerKind.Success);
-        }
-        catch (Exception ex)
-        {
-            SetStartWithWindowsSilently(!enable);
-            _banner.Show(ResultText.Exception(L, ex), BannerKind.Error);
-        }
-        finally
-        {
-            StartupBusy = false;
-        }
-    }
-
-    void SetStartWithWindowsSilently(bool value)
-    {
-        _updating = true;
-        _startWithWindows = value;
-        OnPropertyChanged(nameof(StartWithWindows));
-        _updating = false;
     }
 
     async Task ExportBackupAsync()
@@ -286,11 +180,7 @@ public sealed class ProfilesViewModel : TabViewModel
         var list = _store.List();
         Profiles.Clear();
         foreach (var p in list) Profiles.Add(new ProfileItem(p.Name, Describe(p), p.Saved.ToString("g", L.Culture)));
-        _updating = true;
-        ProfileNames.Clear();
-        foreach (var p in list) ProfileNames.Add(p.Name);
-        OnPropertyChanged(nameof(StartupProfile));
-        _updating = false;
+        ProfilesChanged?.Invoke(this, EventArgs.Empty);
         _selected = Profiles.FirstOrDefault(p => p.Name == keep);
         OnPropertyChanged(nameof(HasProfiles));
         OnPropertyChanged(nameof(SelectedProfile));

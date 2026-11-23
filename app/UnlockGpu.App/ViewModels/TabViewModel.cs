@@ -10,7 +10,9 @@ namespace UnlockGpu.App.ViewModels;
 /// <param name="Lock">VRAM lock evaluation for this reading (null when it could not be evaluated).</param>
 /// <param name="AveragePower30W">Average power of the last 30 s (NaN when unknown).</param>
 /// <param name="History">Monitor history (oldest first) for the graph.</param>
-public sealed record SampleContext(GpuSample Sample, VramLockState? Lock, double AveragePower30W, IReadOnlyList<GpuSample> History);
+/// <param name="Info">Static GPU info read on the monitor thread (null when the GPU is unavailable); the UI thread never reads IGpu.Info itself.</param>
+public sealed record SampleContext(GpuSample Sample, VramLockState? Lock, double AveragePower30W, IReadOnlyList<GpuSample> History,
+    GpuInfo? Info = null);
 
 /// <summary>
 /// Base for the tab view-models. The main view-model calls these hooks on the UI thread, so tabs never subscribe to

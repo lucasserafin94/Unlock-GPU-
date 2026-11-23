@@ -69,6 +69,8 @@ public sealed class WmiUniwillEcChannel : IUniwillEcChannel
         }
         catch (COMException ex)
         {
+            // Conexao/instancia podem ter ficado invalidas (WMI reiniciado etc.): descarta para reconectar na proxima chamada.
+            Reset();
             throw new InvalidOperationException($"GetSetULong failed (0x{ex.HResult:X8}).", ex);
         }
         finally
@@ -102,8 +104,20 @@ public sealed class WmiUniwillEcChannel : IUniwillEcChannel
         }
         catch (COMException ex)
         {
+            // Nao deixa um SWbemServices quebrado em cache.
+            Reset();
             throw new InvalidOperationException($"WMI {UniwillEc.WmiClass} unavailable (0x{ex.HResult:X8}).", ex);
         }
+    }
+
+    /// <summary>Releases the cached COM objects so the next call reconnects from scratch.</summary>
+    void Reset()
+    {
+        object? instance = _instance, services = _services;
+        _instance = null;
+        _services = null;
+        WbemScripting.Release(instance);
+        WbemScripting.Release(services);
     }
 
     /// <summary>First active instance by InstanceName (ordinal), matching what the ACPI WMI mapper exposes as instance 0.</summary>
@@ -136,10 +150,7 @@ public sealed class WmiUniwillEcChannel : IUniwillEcChannel
     {
         if (_disposed) return;
         _disposed = true;
-        WbemScripting.Release(_instance);
-        WbemScripting.Release(_services);
-        _instance = null;
-        _services = null;
+        Reset();
     }
 
     sealed class EcClassMissingException(Exception? inner) : InvalidOperationException("oem.classMissing", inner);

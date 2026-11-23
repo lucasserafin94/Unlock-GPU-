@@ -69,4 +69,18 @@ public static class ServiceTextKeys
     public const string ProfileInvalidName = "svc.profile.error.invalidName";
     /// <summary>The file is not a valid Unlock GPU backup.</summary>
     public const string BackupInvalid = "svc.backup.error.invalid";
+
+    // ---- rom override (persistent power ceiling, driver class key) ----
+    /// <summary>No NVIDIA display device was found via WMI.</summary>
+    public const string RomNoGpu = "svc.rom.error.noGpu";
+    /// <summary>The GPU driver class key could not be opened (usually: not running as administrator).</summary>
+    public const string RomKeyOpen = "svc.rom.error.keyOpen";
+    /// <summary>The capture file has no valid romOverride entries.</summary>
+    public const string RomCaptureInvalid = "svc.rom.error.captureInvalid";
+    /// <summary>A staged slot did not read back identical to what was written.</summary>
+    public const string RomReadBackMismatch = "svc.rom.error.readBack";
+    /// <summary>The device restart (and the hard-cycle fallback) failed.</summary>
+    public const string RomRestartFailed = "svc.rom.error.restartFailed";
+    /// <summary>The live power ceiling after the restart differs from the staged value.</summary>
+    public const string RomMaxMismatch = "svc.rom.error.maxMismatch";
 }

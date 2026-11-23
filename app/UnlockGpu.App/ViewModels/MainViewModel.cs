@@ -22,6 +22,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     readonly Localizer _l;
     readonly TabViewModel[] _tabs;
     GpuSample? _latest;
+    // Ultima info nao nula lida fora da thread de UI (StartAsync ou thread do monitor); o header so usa este cache.
+    GpuInfo? _info;
+    bool _infoChecked;
     string _gpuName = "";
     string _headerDetail = "";
     string _trayText = "";
@@ -49,10 +52,13 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Tuning = new TuningViewModel(localizer, services.Gpu, services.Offsets, services.Vram, services.Power, services.Settings, Banner);
         AutoTune = new AutoTuneViewModel(localizer, services.Tuner, services.Offsets, services.Stability, Banner);
         Sessions = new SessionsViewModel(localizer, services.Recorder, dialogs, services.Paths, Banner);
-        Profiles = new ProfilesViewModel(localizer, services.Profiles, services.Applier, services.Startup, services.Backup,
+        Profiles = new ProfilesViewModel(localizer, services.Profiles, services.Applier, services.Backup,
             services.Settings, dialogs, services.UiState, Banner);
         Oem = new OemViewModel(localizer, services.Oem, services.Gpu);
-        Settings = new SettingsViewModel(localizer, services.Settings, theme, services.Monitor);
+        Startup = new StartupViewModel(localizer, services.Startup, services.Profiles, services.Settings, Banner);
+        Drift = new DriftViewModel(localizer, services.Profiles, services.Settings, services.UiState,
+            name => Profiles.ApplyByNameAsync(name), Profiles.ResetToDefaultsAsync);
+        Settings = new SettingsViewModel(localizer, services.Settings, theme, services.Monitor, Startup);
         _tabs = [Monitor, Tuning, AutoTune, Sessions, Profiles, Oem, Settings];
 
         VersionText = "v" + AppVersion();
@@ -62,6 +68,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _s.Settings.Changed += OnSettingsSaved;
         _l.Changed += OnLanguageChanged;
         Profiles.Applied += OnHardwareChanged;
+        Profiles.ProfilesChanged += OnProfilesChanged;
         AutoTune.OffsetsChanged += OnHardwareChanged;
         UpdateHealth(_s.Stability.Current);
         UpdateHeader();
@@ -69,6 +76,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     /// <summary>Main message strip.</summary>
     public BannerViewModel Banner { get; } = new();
+    /// <summary>Status bar: hardware versus the active profile, with Apply / Reset.</summary>
+    public DriftViewModel Drift { get; }
     /// <summary>Monitor tab.</summary>
     public MonitorViewModel Monitor { get; }
     /// <summary>Tuning tab.</summary>
@@ -83,6 +92,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     public OemViewModel Oem { get; }
     /// <summary>Settings tab.</summary>
     public SettingsViewModel Settings { get; }
+    /// <summary>Start with Windows card (shown in the Settings tab).</summary>
+    public StartupViewModel Startup { get; }
 
     /// <summary>"v4.0.0".</summary>
     public string VersionText { get; }
@@ -106,10 +117,12 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _s.Monitor.Start();
         if (!available)
             Banner.Show(_l.T("ui.error.gpuUnavailable", ("error", _s.Gpu.LastError)), BannerKind.Error);
-        await Task.Run(() => _s.Gpu.Info).ConfigureAwait(true);
+        var info = await Task.Run(() => _s.Gpu.Info).ConfigureAwait(true);
+        if (info != null) _info = info;
+        _infoChecked = true;
         UpdateHeader();
         if (available) await Tuning.InitializeAsync().ConfigureAwait(true);
-        await Profiles.InitializeAsync().ConfigureAwait(true);
+        await Startup.InitializeAsync().ConfigureAwait(true);
         await Oem.RefreshCommand.ExecuteAsync().ConfigureAwait(true);
     }
 
@@ -125,8 +138,11 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         // Monitor thread: do the per-sample work here so the UI thread only formats text.
         VramLockState? lockState = null;
+        GpuInfo? info = null;
         try
         {
+            // IGpu.Info pode rodar nvmlInit e esperar o lock do NVML: le aqui, nunca na thread de UI.
+            info = _s.Gpu.Info;
             if (sample.Ok) lockState = _s.Vram.Evaluate(sample);
             _s.Recorder.Add(sample);
             _s.Stability.Feed(sample);
@@ -136,7 +152,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _s.Log.Error("UI sample processing", ex);
         }
         var history = _s.Monitor.History;
-        var ctx = new SampleContext(sample, lockState, Average(history, sample.Time), history);
+        var ctx = new SampleContext(sample, lockState, Average(history, sample.Time), history, info);
         _ui.Post(() => Dispatch(ctx));
     }
 
@@ -144,7 +160,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _latest = ctx.Sample;
+        if (ctx.Info != null) _info = ctx.Info;
+        _infoChecked = true;
         foreach (var tab in _tabs) tab.OnSample(ctx);
+        Drift.OnSample(ctx);
         UpdateHeader();
         var s = ctx.Sample;
         TrayText = s.Ok
@@ -177,7 +196,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
                 Banner.Show(_l.T("ui.reset.detected"), BannerKind.Warning);
                 return;
             }
-            string? name = st.StartupProfile ?? _s.UiState.Current.LastProfile;
+            string? name = (st.ApplyProfileAtStartup ? st.StartupProfile : null) ?? _s.UiState.Current.LastProfile;
             if (string.IsNullOrWhiteSpace(name))
             {
                 Banner.Show(_l.T("ui.reset.nothingToReapply"), BannerKind.Warning);
@@ -204,6 +223,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             _ = OnDriverResetAsync();
             return;
         }
+        Drift.ReloadProfile();
         _ = ReloadOffsetsSafeAsync();
     }
 
@@ -213,9 +233,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _s.Log.Error("UI reload offsets", ex); }
     }
 
+    void OnProfilesChanged(object? sender, EventArgs e)
+    {
+        Startup.RefreshProfiles();
+        Drift.ReloadProfile();
+    }
+
     void OnLanguageChanged(object? sender, EventArgs e)
     {
         foreach (var tab in _tabs) tab.OnLanguageChanged();
+        Drift.OnLanguageChanged();
         UpdateHealth(_s.Stability.Current);
         UpdateHeader();
     }
@@ -229,6 +256,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
             && _s.Monitor.Interval != TimeSpan.FromSeconds(settings.RefreshSeconds))
             _s.Monitor.Interval = TimeSpan.FromSeconds(settings.RefreshSeconds);
         foreach (var tab in _tabs) tab.OnSettingsChanged(settings);
+        Drift.ReloadProfile();
     }
 
     void UpdateHealth(HealthReport report)
@@ -242,8 +270,9 @@ public sealed class MainViewModel : ObservableObject, IDisposable
 
     void UpdateHeader()
     {
-        var info = _s.Gpu.Info;
-        GpuName = info?.Name ?? _l.T("ui.header.noGpu");
+        // So usa o cache: nada de IGpu.Info aqui (thread de UI). Antes da primeira leitura mostra um placeholder.
+        var info = _info;
+        GpuName = info?.Name ?? (_infoChecked ? _l.T("ui.header.noGpu") : Format.Unknown);
         HeaderDetail = info == null ? "" : _l.T("ui.header.detail", ("driver", info.Driver), ("vbios", info.Vbios),
             ("pstate", _latest is { Ok: true } s ? s.PState : Format.Unknown));
     }
@@ -285,6 +314,7 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         _s.Settings.Changed -= OnSettingsSaved;
         _l.Changed -= OnLanguageChanged;
         Profiles.Applied -= OnHardwareChanged;
+        Profiles.ProfilesChanged -= OnProfilesChanged;
         AutoTune.OffsetsChanged -= OnHardwareChanged;
         _s.Monitor.Stop();
     }

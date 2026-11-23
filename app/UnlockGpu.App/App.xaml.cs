@@ -135,8 +135,8 @@ public partial class App : Application
     {
         if (_exiting) return;
         _exiting = true;
-        _window?.CloseForExit();
-        Shutdown(0);
+        try { _window?.CloseForExit(); }
+        finally { Shutdown(0); }
     }
 
     /// <inheritdoc/>

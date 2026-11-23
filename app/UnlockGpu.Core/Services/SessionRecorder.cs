@@ -65,11 +65,21 @@ public sealed class SessionRecorder : ISessionRecorder, IDisposable
                 try { fs = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.ReadWrite); }
                 catch (IOException) when (File.Exists(path) && i < 100) { }
             }
-            var writer = new StreamWriter(fs, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)) { AutoFlush = true };
-            string labelMeta = (label ?? "").Replace(";", ",", StringComparison.Ordinal).ReplaceLineEndings(" ");
-            writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
-                $"# UnlockGPU session v{FormatVersion}; started={started:yyyy-MM-ddTHH:mm:ss}; label={labelMeta}; separator=;; decimal=.; culture=invariant"));
-            writer.WriteLine(string.Join(';', Columns));
+            StreamWriter? writer = null;
+            try
+            {
+                writer = new StreamWriter(fs, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true)) { AutoFlush = true };
+                string labelMeta = (label ?? "").Replace(";", ",", StringComparison.Ordinal).ReplaceLineEndings(" ");
+                writer.WriteLine(string.Create(CultureInfo.InvariantCulture,
+                    $"# UnlockGPU session v{FormatVersion}; started={started:yyyy-MM-ddTHH:mm:ss}; label={labelMeta}; separator=;; decimal=.; culture=invariant"));
+                writer.WriteLine(string.Join(';', Columns));
+            }
+            catch
+            {
+                // Libera o arquivo (senao fica travado) e repassa o erro original
+                CloseQuietly(writer, fs);
+                throw;
+            }
             _rec = new Recording(path, writer, _time.GetUtcNow());
             _log.Info("SESSION start " + path);
         }
@@ -151,6 +161,17 @@ public sealed class SessionRecorder : ISessionRecorder, IDisposable
         ulong unknown = (ulong)r & ~known;
         if (unknown != 0) names.Add("0x" + unknown.ToString("X", CultureInfo.InvariantCulture));
         return string.Join('|', names);
+    }
+
+    /// <summary>Disposes the writer (which owns the stream) or, if it was never created, the stream itself; dispose errors are ignored.</summary>
+    static void CloseQuietly(StreamWriter? writer, FileStream fs)
+    {
+        try { writer?.Dispose(); }
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
+        // Dispose repetido do FileStream e no-op; garante o fechamento se o writer falhou
+        try { fs.Dispose(); }
+        catch (IOException) { }
     }
 
     static string SafeLabel(string? label)

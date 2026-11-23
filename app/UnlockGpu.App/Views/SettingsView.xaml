@@ -103,6 +103,31 @@
                 </StackPanel>
             </Border>
 
+            <!-- start with Windows -->
+            <Border Style="{StaticResource Card}" DataContext="{Binding Startup}">
+                <StackPanel>
+                    <TextBlock Text="{l:Tr ui.startup.title}" Style="{StaticResource SectionTitle}"/>
+                    <CheckBox Style="{StaticResource Switch}" Content="{l:Tr ui.startup.startWithWindows}" IsChecked="{Binding StartWithWindows}"
+                              IsEnabled="{Binding NotBusy}"/>
+                    <CheckBox Style="{StaticResource Switch}" Content="{l:Tr ui.startup.startInTray}" IsChecked="{Binding StartInTray}"
+                              IsEnabled="{Binding NotBusy}" Margin="0,10,0,0"/>
+                    <CheckBox Style="{StaticResource Switch}" Content="{l:Tr ui.startup.applyProfile}" IsChecked="{Binding ApplyProfileAtStartup}"
+                              IsEnabled="{Binding NotBusy}" Margin="0,10,0,0"/>
+                    <Grid Margin="0,8,0,0" IsEnabled="{Binding ApplyProfileAtStartup}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="200"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{l:Tr ui.startup.profile}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
+                        <ComboBox Grid.Column="1" ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding StartupProfile}"
+                                  AutomationProperties.Name="{l:Tr ui.startup.profile}"/>
+                    </Grid>
+                    <TextBlock Text="{l:Tr ui.startup.noProfiles}" Style="{StaticResource Note}"
+                               Visibility="{Binding HasProfiles, Converter={StaticResource InverseBoolToVis}}"/>
+                    <TextBlock Text="{l:Tr ui.startup.note}" Style="{StaticResource Note}"/>
+                </StackPanel>
+            </Border>
+
             <!-- behaviour -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>

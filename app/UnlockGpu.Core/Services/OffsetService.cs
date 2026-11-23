@@ -36,49 +36,56 @@ public sealed class OffsetService : IOffsetService
     public ApplyResult Apply(int coreMHz, int memMHz)
     {
         string requested = Format(coreMHz, memMHz);
-        if (_writeGate?.IsBlocked == true) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
-        lock (_gate)
+        if (_writeGate?.TryBeginWrite() == false) return ApplyError.Fail(requested, ServiceTextKeys.TunerBusy);
+        try
         {
-            var core = _gpu.GetOffset(ClockDomain.Core);
-            var mem = _gpu.GetOffset(ClockDomain.Memory);
-            if (core is null || mem is null)
-                return ApplyError.Fail(requested, ServiceTextKeys.OffsetUnavailable, _gpu.LastError);
-            if (!InRange(coreMHz, core))
-                return Reject(requested, "core", coreMHz, core);
-            if (!InRange(memMHz, mem))
-                return Reject(requested, "mem", memMHz, mem);
-
-            // Tudo ou nada: se o nucleo for recusado, a memoria nem e tocada; se a memoria for recusada,
-            // o nucleo volta ao valor anterior. Nunca fica metade aplicada.
-            int rcCore = core.CurrentMHz == coreMHz ? 0 : _gpu.SetOffset(ClockDomain.Core, coreMHz);
-            int rcMem = rcCore != 0 || mem.CurrentMHz == memMHz ? 0 : _gpu.SetOffset(ClockDomain.Memory, memMHz);
-            if (rcCore == 0 && rcMem != 0 && core.CurrentMHz != coreMHz)
+            lock (_gate)
             {
-                int rcBack = _gpu.SetOffset(ClockDomain.Core, core.CurrentMHz);
-                _log.Warn($"OFFSET memory refused; core rolled back to {core.CurrentMHz} (rc={rcBack})");
-            }
+                var core = _gpu.GetOffset(ClockDomain.Core);
+                var mem = _gpu.GetOffset(ClockDomain.Memory);
+                if (core is null || mem is null)
+                    return ApplyError.Fail(requested, ServiceTextKeys.OffsetUnavailable, _gpu.LastError);
+                if (!InRange(coreMHz, core))
+                    return Reject(requested, "core", coreMHz, core);
+                if (!InRange(memMHz, mem))
+                    return Reject(requested, "mem", memMHz, mem);
 
-            int? core2 = _gpu.GetOffset(ClockDomain.Core)?.CurrentMHz;
-            int? mem2 = _gpu.GetOffset(ClockDomain.Memory)?.CurrentMHz;
-            _tracker?.Record(core2, mem2);
-            string readBack = Format(core2, mem2);
+                // Tudo ou nada: se o nucleo for recusado, a memoria nem e tocada; se a memoria for recusada,
+                // o nucleo volta ao valor anterior. Nunca fica metade aplicada.
+                int rcCore = core.CurrentMHz == coreMHz ? 0 : _gpu.SetOffset(ClockDomain.Core, coreMHz);
+                int rcMem = rcCore != 0 || mem.CurrentMHz == memMHz ? 0 : _gpu.SetOffset(ClockDomain.Memory, memMHz);
+                if (rcCore == 0 && rcMem != 0 && core.CurrentMHz != coreMHz)
+                {
+                    int rcBack = _gpu.SetOffset(ClockDomain.Core, core.CurrentMHz);
+                    _log.Warn($"OFFSET memory refused; core rolled back to {core.CurrentMHz} (rc={rcBack})");
+                }
 
-            if (rcCore != 0 || rcMem != 0)
-            {
-                var parts = new List<string>();
-                if (rcCore != 0) parts.Add("core: " + _gpu.ErrorText(rcCore));
-                if (rcMem != 0) parts.Add("mem: " + _gpu.ErrorText(rcMem));
-                string detail = string.Join("; ", parts);
-                _log.Warn($"OFFSET {requested} refused: {detail}; read back {readBack}");
-                return ApplyError.Fail(requested, ServiceTextKeys.OffsetDriver, detail, readBack);
+                int? core2 = _gpu.GetOffset(ClockDomain.Core)?.CurrentMHz;
+                int? mem2 = _gpu.GetOffset(ClockDomain.Memory)?.CurrentMHz;
+                _tracker?.Record(core2, mem2);
+                string readBack = Format(core2, mem2);
+
+                if (rcCore != 0 || rcMem != 0)
+                {
+                    var parts = new List<string>();
+                    if (rcCore != 0) parts.Add("core: " + _gpu.ErrorText(rcCore));
+                    if (rcMem != 0) parts.Add("mem: " + _gpu.ErrorText(rcMem));
+                    string detail = string.Join("; ", parts);
+                    _log.Warn($"OFFSET {requested} refused: {detail}; read back {readBack}");
+                    return ApplyError.Fail(requested, ServiceTextKeys.OffsetDriver, detail, readBack);
+                }
+                if (core2 != coreMHz || mem2 != memMHz)
+                {
+                    _log.Warn($"OFFSET {requested} read back {readBack}");
+                    return ApplyError.Fail(requested, ServiceTextKeys.OffsetReadBack, readBack, readBack);
+                }
+                _log.Info($"OFFSET {requested} ok");
+                return new ApplyResult(true, requested, readBack);
             }
-            if (core2 != coreMHz || mem2 != memMHz)
-            {
-                _log.Warn($"OFFSET {requested} read back {readBack}");
-                return ApplyError.Fail(requested, ServiceTextKeys.OffsetReadBack, readBack, readBack);
-            }
-            _log.Info($"OFFSET {requested} ok");
-            return new ApplyResult(true, requested, readBack);
+        }
+        finally
+        {
+            _writeGate?.EndWrite();
         }
     }
 

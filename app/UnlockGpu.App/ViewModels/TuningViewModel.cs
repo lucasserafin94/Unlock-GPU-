@@ -66,6 +66,8 @@ public sealed class TuningViewModel : TabViewModel
     bool _lockEnabled, _lockInitialized, _lockBusy;
     uint _selectedLevel;
     VramLockState? _lockState;
+    // Info da GPU lida fora da thread de UI (InitializeAsync em Task.Run ou amostras do monitor).
+    GpuInfo? _info;
     string _lockStatus = "";
     PowerSupport _powerSupport = PowerSupport.Unknown;
     double _powerMin, _powerMax, _powerValue, _enforcedW = double.NaN;
@@ -195,7 +197,7 @@ public sealed class TuningViewModel : TabViewModel
     {
         get
         {
-            var info = _gpu.Info;
+            var info = _info;
             var c = L.Culture;
             return L.T("ui.power.limits",
                 ("enforced", Format.WattsWhole(_enforcedW, c)),
@@ -247,9 +249,9 @@ public sealed class TuningViewModel : TabViewModel
             var levels = await Task.Run(() => _vram.Levels).ConfigureAwait(true);
             BuildLevels(levels);
             var support = await Task.Run(_power.Probe).ConfigureAwait(true);
-            var info = _gpu.Info;
-            PowerMin = info is { MinLimitW: > 0 } ? info.MinLimitW : 0;
-            PowerMax = info is { MaxLimitW: > 0 } ? info.MaxLimitW : 0;
+            var info = await Task.Run(() => _gpu.Info).ConfigureAwait(true);
+            if (info != null) _info = info;
+            ApplyPowerRange();
             _enforcedW = await Task.Run(_gpu.EnforcedLimitW).ConfigureAwait(true);
             PowerValue = double.IsNaN(_enforcedW) ? PowerMin : _enforcedW;
             PowerSupport = support;
@@ -279,6 +281,13 @@ public sealed class TuningViewModel : TabViewModel
     public override void OnSample(SampleContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+        if (context.Info != null && !Equals(context.Info, _info))
+        {
+            bool first = _info == null;
+            _info = context.Info;
+            if (first) ApplyPowerRange();
+            OnPropertyChanged(nameof(PowerLimitsText));
+        }
         if (context.Sample.Ok && !double.IsNaN(context.Sample.LimitW)
             && (double.IsNaN(_enforcedW) || Math.Abs(context.Sample.LimitW - _enforcedW) > 0.05))
         {
@@ -403,10 +412,21 @@ public sealed class TuningViewModel : TabViewModel
             Levels.Add(new VramLevelOption(mhz, Format.Number(mhz, L.Culture) + " MHz", OnLevelSelected));
         if (Levels.Count > 0)
         {
-            _selectedLevel = Levels[0].MHz;
-            Levels[0].SetSilently(true);
+            // Uma amostra pode ter chegado antes da lista existir (o SelectLevelSilently dela nao achou nada):
+            // se a VRAM ja esta travada num nivel da lista, seleciona esse; senao o primeiro.
+            uint pick = _lockState is { Locked: true, Lost: false, LevelMHz: uint lv } && Levels.Any(o => o.MHz == lv)
+                ? lv
+                : Levels[0].MHz;
+            SelectLevelSilently(pick);
         }
         OnPropertiesChanged(nameof(HasLevels), nameof(CanToggleLock));
+    }
+
+    void ApplyPowerRange()
+    {
+        var info = _info;
+        PowerMin = info is { MinLimitW: > 0 } ? info.MinLimitW : 0;
+        PowerMax = info is { MaxLimitW: > 0 } ? info.MaxLimitW : 0;
     }
 
     void SelectLevelSilently(uint mhz)

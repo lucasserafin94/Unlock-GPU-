@@ -44,25 +44,6 @@
                 </StackPanel>
             </Border>
 
-            <!-- startup -->
-            <Border Style="{StaticResource Card}">
-                <StackPanel>
-                    <TextBlock Text="{l:Tr ui.profiles.startupTitle}" Style="{StaticResource SectionTitle}"/>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{l:Tr ui.profiles.startupProfile}" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                        <ComboBox Grid.Column="1" ItemsSource="{Binding ProfileNames}" SelectedItem="{Binding StartupProfile}"
-                                  AutomationProperties.Name="{l:Tr ui.profiles.startupProfile}"/>
-                    </Grid>
-                    <CheckBox Style="{StaticResource Switch}" Content="{l:Tr ui.profiles.startWithWindows}" IsChecked="{Binding StartWithWindows}"
-                              Margin="0,10,0,0" IsEnabled="{Binding StartupBusy, Converter={StaticResource Not}}"/>
-                    <TextBlock Text="{l:Tr ui.profiles.startupNote}" Style="{StaticResource Note}"/>
-                </StackPanel>
-            </Border>
-
             <!-- backup -->
             <Border Style="{StaticResource Card}">
                 <StackPanel>

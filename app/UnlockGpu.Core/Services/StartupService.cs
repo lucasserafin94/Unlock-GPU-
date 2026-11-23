@@ -45,9 +45,14 @@ public sealed class StartupService : IStartupService
     }
 
     /// <inheritdoc/>
-    public void Enable(string profileName)
+    public void Enable(string profileName) => Enable(new StartupOptions(false, profileName));
+
+    /// <inheritdoc/>
+    public void Enable(StartupOptions options)
     {
-        string xml = BuildTaskXml(profileName);
+        ArgumentNullException.ThrowIfNull(options);
+        string xml = BuildTaskXml(options);
+        string profileName = options.ProfileName ?? "-";
         string tmp = Path.Combine(Path.GetTempPath(), "UnlockGPU-task-" + Guid.NewGuid().ToString("N") + ".xml");
         try
         {
@@ -58,7 +63,7 @@ public sealed class StartupService : IStartupService
                 _log.Warn($"STARTUP create failed ({code}): {output.Trim()}");
                 throw new InvalidOperationException(ApplyError.Compose(ServiceTextKeys.StartupCreateFailed, output.Trim()));
             }
-            _log.Info($"STARTUP enabled with profile '{profileName}'");
+            _log.Info($"STARTUP enabled (tray={options.StayInTray}, profile '{profileName}')");
         }
         finally
         {
@@ -81,19 +86,38 @@ public sealed class StartupService : IStartupService
     }
 
     /// <summary>Command-line arguments for the task.</summary>
-    public static string BuildArguments(string profileName) => $"--silent --apply-profile \"{ValidName(profileName)}\"";
+    public static string BuildArguments(string profileName) => BuildArguments(new StartupOptions(false, profileName));
+
+    /// <summary>
+    /// Command-line arguments for the task: tray mode <c>--minimized [--apply-profile "x"]</c>; one-shot mode
+    /// <c>--silent --apply-profile "x"</c>; no tray and no profile = no arguments (the window opens).
+    /// </summary>
+    public static string BuildArguments(StartupOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        string? profile = options.ProfileName == null ? null : $"--apply-profile \"{ValidName(options.ProfileName)}\"";
+        if (options.StayInTray) return profile == null ? "--minimized" : "--minimized " + profile;
+        return profile == null ? "" : "--silent " + profile;
+    }
+
+    /// <summary>True when the started process keeps running (tray or window), so the task must not time out.</summary>
+    static bool KeepsRunning(StartupOptions o) => o.StayInTray || o.ProfileName == null;
 
     /// <summary>Task Scheduler XML (schema 1.2) for the startup task. Pure: does not touch the system.</summary>
-    public string BuildTaskXml(string profileName)
+    public string BuildTaskXml(string profileName) => BuildTaskXml(new StartupOptions(false, profileName));
+
+    /// <summary>Task Scheduler XML (schema 1.2) for the startup task. Pure: does not touch the system.</summary>
+    public string BuildTaskXml(StartupOptions options)
     {
-        string args = BuildArguments(profileName);
+        ArgumentNullException.ThrowIfNull(options);
+        string args = BuildArguments(options);
         if (string.IsNullOrEmpty(_exePath))
             throw new InvalidOperationException(ServiceTextKeys.StartupNoExe);
 
         var doc = new XDocument(
             new XElement(Ns + "Task", new XAttribute("version", "1.2"),
                 new XElement(Ns + "RegistrationInfo",
-                    new XElement(Ns + "Description", "Unlock GPU: applies the selected profile at logon."),
+                    new XElement(Ns + "Description", "Unlock GPU: starts at logon (tray and/or profile apply, as chosen in the app)."),
                     new XElement(Ns + "URI", "\\" + TaskName)),
                 new XElement(Ns + "Triggers",
                     new XElement(Ns + "LogonTrigger",
@@ -110,7 +134,9 @@ public sealed class StartupService : IStartupService
                     new XElement(Ns + "DisallowStartIfOnBatteries", "false"),
                     new XElement(Ns + "StopIfGoingOnBatteries", "false"),
                     new XElement(Ns + "StartWhenAvailable", "true"),
-                    new XElement(Ns + "ExecutionTimeLimit", "PT5M"),
+                    // A tray instance runs for the whole session: PT0S = no time limit (Task Scheduler would kill it).
+                    new XElement(Ns + "ExecutionTimeLimit", KeepsRunning(options) ? "PT0S" : "PT5M"),
+                    new XElement(Ns + "AllowHardTerminate", "true"),
                     new XElement(Ns + "Enabled", "true"),
                     new XElement(Ns + "Priority", "7")),
                 new XElement(Ns + "Actions", new XAttribute("Context", "Author"),
@@ -124,7 +150,9 @@ public sealed class StartupService : IStartupService
     static string ValidName(string? name)
     {
         string trimmed = name?.Trim() ?? "";
-        if (trimmed.Length == 0 || trimmed.Contains('"', StringComparison.Ordinal) || trimmed.Any(char.IsControl))
+        // Uma barra invertida no fim escaparia a aspa de fechamento do argumento entre aspas.
+        if (trimmed.Length == 0 || trimmed.Contains('"', StringComparison.Ordinal) || trimmed.Any(char.IsControl) ||
+            trimmed.EndsWith('\\'))
             throw new ArgumentException(ServiceTextKeys.StartupInvalidName, nameof(name));
         return trimmed;
     }
