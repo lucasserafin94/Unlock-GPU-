@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/app/">
+    <Project Path="app/UnlockGpu.App/UnlockGpu.App.csproj" />
+    <Project Path="app/UnlockGpu.Core/UnlockGpu.Core.csproj" />
+    <Project Path="app/UnlockGpu.Tests/UnlockGpu.Tests.csproj" />
+  </Folder>
+</Solution>

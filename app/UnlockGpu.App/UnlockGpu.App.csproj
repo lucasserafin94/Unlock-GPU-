@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>UnlockGpu.App</RootNamespace>
+    <AssemblyName>UnlockGPU</AssemblyName>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>..\..\assets\UnlockGPU.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UnlockGpu.Core\UnlockGpu.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Resource Include="..\..\assets\logo-256.png" Link="Assets\logo-256.png" />
+    <Resource Include="..\..\assets\UnlockGPU.ico" Link="Assets\UnlockGPU.ico" />
+  </ItemGroup>
+</Project>
