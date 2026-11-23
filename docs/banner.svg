@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-label="Unlock GPU — monitor e ajustes para GPUs NVIDIA de notebook">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1B2229"/>
+      <stop offset="1" stop-color="#0D1115"/>
+    </linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#26303A"/>
+      <stop offset="1" stop-color="#12171C"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.22" cy="0.5" r="0.45">
+      <stop offset="0" stop-color="#BAF568" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#BAF568" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0H0V32" fill="none" stroke="#FFFFFF" stroke-opacity="0.035"/>
+    </pattern>
+  </defs>
+  <rect width="1280" height="320" rx="24" fill="url(#bg)"/>
+  <rect width="1280" height="320" rx="24" fill="url(#grid)"/>
+  <rect width="1280" height="320" rx="24" fill="url(#glow)"/>
+
+  <!-- logo: chip com cadeado aberto -->
+  <g transform="translate(150 60) scale(0.78)">
+    <rect x="8" y="8" width="240" height="240" rx="52" fill="url(#tile)"/>
+    <g stroke="#7FA84A" stroke-width="7" stroke-linecap="round">
+      <path d="M92 62v16M116 62v16M140 62v16M164 62v16"/>
+      <path d="M92 178v16M116 178v16M140 178v16M164 178v16"/>
+      <path d="M62 92h16M62 116h16M62 140h16M62 164h16"/>
+      <path d="M178 92h16M178 116h16M178 140h16M178 164h16"/>
+    </g>
+    <rect x="80" y="80" width="96" height="96" rx="16" fill="#11161B" stroke="#BAF568" stroke-width="8"/>
+    <path d="M112 128v-16a16 16 0 0 1 32 0v-8" fill="none" stroke="#BAF568" stroke-width="7" stroke-linecap="round" transform="rotate(-28 112 128)"/>
+    <rect x="102" y="126" width="52" height="38" rx="7" fill="#BAF568"/>
+    <circle cx="128" cy="141" r="5.5" fill="#11161B"/>
+    <rect x="125.5" y="143" width="5" height="11" fill="#11161B"/>
+  </g>
+
+  <text x="390" y="150" fill="#E8ECEF" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="76" font-weight="700" letter-spacing="-1">Unlock GPU</text>
+  <text x="394" y="200" fill="#B5BEC5" font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="26">Libere todo o potencial da GPU NVIDIA do seu notebook</text>
+
+  <g font-family="Segoe UI, Inter, Helvetica, Arial, sans-serif" font-size="17" font-weight="600">
+    <rect x="394" y="226" width="150" height="34" rx="17" fill="#1F3A24"/>
+    <text x="469" y="249" fill="#BAF568" text-anchor="middle">NVML pública</text>
+    <rect x="556" y="226" width="186" height="34" rx="17" fill="#2A3138"/>
+    <text x="649" y="249" fill="#D3DAE0" text-anchor="middle">Leitura de volta ✓</text>
+    <rect x="754" y="226" width="156" height="34" rx="17" fill="#2A3138"/>
+    <text x="832" y="249" fill="#D3DAE0" text-anchor="middle">8 idiomas</text>
+    <rect x="922" y="226" width="160" height="34" rx="17" fill="#2A3138"/>
+    <text x="1002" y="249" fill="#D3DAE0" text-anchor="middle">Grátis e aberto</text>
+  </g>
+
+  <!-- mini grafico decorativo -->
+  <polyline points="1110,110 1130,96 1150,104 1170,78 1190,86 1210,62 1230,70" fill="none" stroke="#BAF568" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="1110,140 1130,132 1150,138 1170,120 1190,126 1210,112 1230,116" fill="none" stroke="#6CB6FF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+</svg>
