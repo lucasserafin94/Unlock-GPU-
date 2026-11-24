@@ -118,3 +118,12 @@ O Claude tinha se limitado sozinho em três lugares:
 - **Verificação do hot restart sem slot MAX**: placas cujo layout não resolve o papel MAX (só rails, por exemplo) agora verificam o teto contra o `MaxLimitW` atual da NVML em vez de um valor de slider defasado (`ApplyPersistentAsync`).
 - **Fakes de teste promovidos a compartilhados** (`Fakes/FakeRomOverrideService.cs`, `Fakes/FakeTuningServices.cs`): o fake do driver-key agora é mutável (SetSlotValue/ClearAll alteram o estado lido depois), com contagem de leituras e registro do expectedMaxW — base para os testes de sincronização.
 - **Testes: 117/117** (+3 novos em `RomTuningSyncTests.cs`: clear na Rom → card Tuning esvazia; apply na Tuning → Rom relê; sem slot MAX → verificação contra o teto da NVML).
+
+## 10. Status v4.3.2 (24/11) — correção do erro 740 no instalador
+
+- **O bug**: o manifest do app pedia `requireAdministrator`; quando o Inno Setup tentou abrir o exe ao final da instalação sem estar elevado, o `CreateProcess` falhou com código 740 ("A operação solicitada requer elevação").
+- **Correção**:
+  - Manifest → `highestAvailable`: qualquer lançador (instalador, Task Scheduler, Explorer) abre o processo sem falhar.
+  - Novo helper `Services/Elevation.cs` + bootstrap no `OnStartup`: modo interativo sem elevação se relança com um único prompt UAC (`runas`, repassando os argumentos); o usuário cancela → segue sem admin (logado). Modo `--silent` (tarefa de startup) não pede UAC no login — a tarefa já roda com `RunLevel=HighestAvailable`.
+  - Bônus: acaba o prompt UAC a cada login do modo silencioso (antes, o `requireAdministrator` no manifest pedia elevação em todo logon).
+- **Testes: 117/117** · build limpo com warnings como erros.

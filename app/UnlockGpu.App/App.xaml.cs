@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Threading;
 using UnlockGpu.App.Hosting;
@@ -40,6 +40,20 @@ public partial class App : Application
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
         if (options.Unknown.Count > 0) log.Warn("Ignored arguments: " + string.Join(' ', options.Unknown));
+
+        // Self-elevation: the manifest is "highest available" so any launcher can start us; interactive mode needs
+        // admin for NVML writes, so re-launch with a single UAC prompt when not elevated. Silent (startup task) runs
+        // with the task's "highest available" privileges and must not pop UAC at logon.
+        if (!options.Silent && !Elevation.IsElevated())
+        {
+            if (Elevation.RelaunchElevated(e.Args))
+            {
+                log.Info("Re-launched elevated; exiting the unelevated instance");
+                Shutdown(0);
+                return;
+            }
+            log.Warn("Elevation refused or unavailable: running without admin rights");
+        }
 
         if (options.Silent)
         {
