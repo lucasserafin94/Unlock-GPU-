@@ -82,6 +82,9 @@ public sealed class RomViewModel : TabViewModel
     public ObservableCollection<RomSlotRow> Slots { get; } = [];
     /// <summary>No slots written (factory ceiling) — shows the note instead of the list.</summary>
     public bool NoSlots { get => _noSlots; private set => SetProperty(ref _noSlots, value); }
+
+    /// <summary>Raised after a successful stage or clear (the driver key changed; other tabs sharing it must re-read).</summary>
+    public event EventHandler? SlotsChanged;
     /// <summary>Finds the GPU and lists its driver-key slots again.</summary>
     public AsyncRelayCommand RefreshCommand { get; }
     /// <summary>Picks a capture file in an open dialog.</summary>
@@ -154,6 +157,7 @@ public sealed class RomViewModel : TabViewModel
         StatusText = ResultText.Describe(L, restart);
         IsWarning = !restart.Ok;
         await LoadSlotsAsync(pnpId).ConfigureAwait(true);
+        SlotsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Deletes all slots and hot-restarts the GPU back to the factory ceiling.</summary>
@@ -176,6 +180,7 @@ public sealed class RomViewModel : TabViewModel
         StatusText = ResultText.Describe(L, restart);
         IsWarning = !restart.Ok;
         await LoadSlotsAsync(pnpId).ConfigureAwait(true);
+        SlotsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     void Browse()

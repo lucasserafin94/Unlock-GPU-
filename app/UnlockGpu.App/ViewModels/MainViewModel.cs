@@ -72,6 +72,10 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Profiles.Applied += OnHardwareChanged;
         Profiles.ProfilesChanged += OnProfilesChanged;
         AutoTune.OffsetsChanged += OnHardwareChanged;
+        // The Rom tab and the Tuning persistent card share the driver key: when one writes, the other re-reads,
+        // so neither shows stale values (or a false "dirty").
+        Rom.SlotsChanged += OnRomSlotsChanged;
+        Tuning.PersistentApplied += OnTuningPersistentApplied;
         UpdateHealth(_s.Stability.Current);
         UpdateHeader();
     }
@@ -238,6 +242,16 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         catch (Exception ex) { _s.Log.Error("UI reload offsets", ex); }
     }
 
+    void OnRomSlotsChanged(object? sender, EventArgs e) => _ = ReloadRomSlotsSafeAsync();
+
+    async Task ReloadRomSlotsSafeAsync()
+    {
+        try { await Tuning.ReloadRomSlotsAsync().ConfigureAwait(true); }
+        catch (Exception ex) { _s.Log.Error("UI reload rom slots", ex); }
+    }
+
+    void OnTuningPersistentApplied(object? sender, EventArgs e) => _ = Rom.RefreshCommand.ExecuteAsync();
+
     void OnProfilesChanged(object? sender, EventArgs e)
     {
         Startup.RefreshProfiles();
@@ -321,6 +335,8 @@ public sealed class MainViewModel : ObservableObject, IDisposable
         Profiles.Applied -= OnHardwareChanged;
         Profiles.ProfilesChanged -= OnProfilesChanged;
         AutoTune.OffsetsChanged -= OnHardwareChanged;
+        Rom.SlotsChanged -= OnRomSlotsChanged;
+        Tuning.PersistentApplied -= OnTuningPersistentApplied;
         _s.Monitor.Stop();
     }
 }

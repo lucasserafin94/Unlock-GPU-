@@ -108,3 +108,13 @@ O Claude tinha se limitado sozinho em três lugares:
 - **5 novas chaves i18n** em todos os 8 idiomas (validar, reset, caixas de valor).
 - **Testes: 114/114** (+13 novos em `TuningPcfTests.cs`: resolução de papéis com delta de fábrica, sync MAX→Base, invariante PCF nos dois sentidos + teto 500 W, commit exato da caixa sem snap, rejeição fora de faixa, vírgula decimal pt-BR, load exato não marca sujo, faixa ampla dos rails, Validate All em estado misto).
 - **Build limpo**: 0 erros / 0 warnings com `TreatWarningsAsErrors` (corrigido o `RegisterAttached` do .NET 10 WPF: agora vive em `DependencyProperty.RegisterAttached(name, type, ownerType, metadata)`).
+
+## 9. Status v4.3.1 (24/11)
+
+- **Abas Rom e Tuning sincronizadas**: as duas compartilham a chave de classe do driver; quando uma grava, a outra relê sozinha.
+  - Stage/Clear na aba Rom → evento `RomViewModel.SlotsChanged` → card persistente da Tuning relê os slots (valores e indicador "dirty" nunca ficam defasados).
+  - *Stage & restart* na Tuning → evento `TuningViewModel.PersistentApplied` → lista de slots da aba Rom atualiza.
+  - Ligação feita no `MainViewModel` (mesmo padrão dos demais eventos), com unsubscribe no Dispose.
+- **Verificação do hot restart sem slot MAX**: placas cujo layout não resolve o papel MAX (só rails, por exemplo) agora verificam o teto contra o `MaxLimitW` atual da NVML em vez de um valor de slider defasado (`ApplyPersistentAsync`).
+- **Fakes de teste promovidos a compartilhados** (`Fakes/FakeRomOverrideService.cs`, `Fakes/FakeTuningServices.cs`): o fake do driver-key agora é mutável (SetSlotValue/ClearAll alteram o estado lido depois), com contagem de leituras e registro do expectedMaxW — base para os testes de sincronização.
+- **Testes: 117/117** (+3 novos em `RomTuningSyncTests.cs`: clear na Rom → card Tuning esvazia; apply na Tuning → Rom relê; sem slot MAX → verificação contra o teto da NVML).

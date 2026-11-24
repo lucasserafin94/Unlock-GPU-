@@ -13,87 +13,11 @@ namespace UnlockGpu.Tests;
 /// </summary>
 public sealed class TuningPcfTests
 {
-    // ---------------- fakes for the tab's services ----------------
-
-    sealed class FakeOffsetService : IOffsetService
-    {
-        public OffsetInfo? Get(ClockDomain domain) => domain switch
-        {
-            ClockDomain.Core => new(0, -1000, 1000),
-            ClockDomain.Memory => new(0, -2000, 6000),
-            _ => null,
-        };
-
-        public ApplyResult Apply(int coreMHz, int memMHz) => new(true, "offsets", $"core {coreMHz} / mem {memMHz} MHz");
-    }
-
-    sealed class FakeVramLockService : IVramLockService
-    {
-        public IReadOnlyList<uint> Levels { get; } = [14001u, 11001u];
-        public ApplyResult Lock(uint levelMHz) => new(true, "lock", $"{levelMHz} MHz");
-        public ApplyResult Unlock() => new(true, "unlock", "auto clocks");
-        public VramLockState Evaluate(GpuSample sample) => new(false, null, 0, false);
-    }
-
-    sealed class FakePowerService : IPowerService
-    {
-        public PowerSupport Support { get; set; } = PowerSupport.Adjustable;
-        public PowerSupport Probe() => Support;
-        public ApplyResult Apply(double watts) => new(true, "power", $"{watts:0} W");
-    }
-
-    sealed class FakeRomOverrideService : IRomOverrideService
-    {
-        public string? PnpId { get; set; } = "PCI\\VEN_10DE&DEV_2C18";
-        public IReadOnlyList<RomSlotInfo> Slots { get; set; } = [];
-        public List<(int Slot, long Raw)> Writes { get; } = [];
-
-        public string? FindGpuPnpId() => PnpId;
-
-        public IReadOnlyList<RomSlotInfo> ReadSlots(string pnpInstanceId, out string error)
-        {
-            error = "";
-            return Slots;
-        }
-
-        public ApplyResult StageCaptured(string pnpInstanceId, string captureFile) => new(true, "stage", "");
-        public ApplyResult ClearAll(string pnpInstanceId) => new(true, "clear", "");
-
-        public ApplyResult SetSlotValue(string pnpInstanceId, int slotIndex, long rawValue)
-        {
-            Writes.Add((slotIndex, rawValue));
-            return new ApplyResult(true, "set slot value", $"slot {slotIndex} verified");
-        }
-
-        public Task<ApplyResult> HotRestartAsync(string pnpInstanceId, double? expectedMaxW, bool force = false, CancellationToken ct = default) =>
-            Task.FromResult(new ApplyResult(true, "hot restart", ""));
-    }
-
-    sealed class FakeSettingsStore : ISettingsStore
-    {
-        public AppSettings Current { get; set; } = new();
-        public List<AppSettings> Saved { get; } = [];
-        public void Save(AppSettings settings) { Current = settings; Saved.Add(settings); Changed?.Invoke(this, settings); }
-        public event EventHandler<AppSettings>? Changed;
-    }
-
-    // ---------------- fixtures ----------------
-
-    static RomSlotInfo Slot(int index, int shadow, int width, long value) => new(index, 10 + width, "", shadow, width, value);
-
-    /// <summary>Same layout as the target board's capture: MAX/BASE/rails at known shadows + a width-8 board input.</summary>
-    static IReadOnlyList<RomSlotInfo> KnownSlots(long maxRaw = 250_000, long baseRaw = 225_000) =>
-    [
-        Slot(0, RomRoleOffsets.Max, 4, maxRaw),
-        Slot(1, RomRoleOffsets.Base, 4, baseRaw),
-        Slot(2, RomRoleOffsets.Nvvdd, 4, 15_001),
-        Slot(3, RomRoleOffsets.Msvdd, 4, 15_001),
-        Slot(4, 0x580FA, 8, 71_000),
-    ];
+    // ---------------- fixtures (shared fakes live in Fakes/) ----------------
 
     static TuningViewModel CreateVm(string lang = "en", IReadOnlyList<RomSlotInfo>? slots = null)
     {
-        var rom = new FakeRomOverrideService { Slots = slots ?? KnownSlots() };
+        var rom = new FakeRomOverrideService { Slots = slots ?? FakeRomLayout.KnownBoard() };
         return new TuningViewModel(new Localizer(lang), new FakeGpu(), new FakeOffsetService(), new FakeVramLockService(),
             new FakePowerService(), rom, new FakeSettingsStore(), new BannerViewModel());
     }
@@ -105,7 +29,7 @@ public sealed class TuningPcfTests
     [Test]
     public void ResolveRoles_KnownBoard_ReportsFactoryDelta()
     {
-        var roles = RomOverrideService.ResolveRoles(KnownSlots());
+        var roles = RomOverrideService.ResolveRoles(FakeRomLayout.KnownBoard());
         Check.True(roles.Any);
         Check.Equal(RomRoleOffsets.FactoryDeltaW, roles.FactoryDeltaW); // 25 W on the captured board
     }
@@ -113,14 +37,7 @@ public sealed class TuningPcfTests
     [Test]
     public void ResolveRoles_DenseFallback_NoFactoryDelta()
     {
-        var slots = new List<RomSlotInfo>
-        {
-            Slot(0, 0x40000, 4, 175_000),
-            Slot(1, 0x40034, 4, 175_000),
-            Slot(2, 0x40100, 4, 12_000),
-            Slot(3, 0x400FC, 4, 12_000),
-        };
-
+        var slots = FakeRomLayout.DenseFallback();
         var roles = RomOverrideService.ResolveRoles(slots);
         Check.True(roles.Any);
         Check.Equal<int?>(null, roles.FactoryDeltaW); // the delta is only known for the captured board

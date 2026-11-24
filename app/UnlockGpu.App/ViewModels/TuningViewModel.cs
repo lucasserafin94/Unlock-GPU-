@@ -137,6 +137,9 @@ public sealed class TuningViewModel : TabViewModel
     /// <summary>Read-back strip of this tab.</summary>
     public BannerViewModel ReadBack { get; } = new();
 
+    /// <summary>Raised after a successful persistent apply (the driver key changed; other tabs sharing it must re-read).</summary>
+    public event EventHandler? PersistentApplied;
+
     // ---------------- offsets ----------------
 
     /// <summary>Core offset can be read and set.</summary>
@@ -690,7 +693,9 @@ public sealed class TuningViewModel : TabViewModel
                 }
             }
 
-            var restart = await _rom.HotRestartAsync(pnpId, _maxW, force: true).ConfigureAwait(true);
+            // Without a MAX slot the write does not move the ceiling: verify against NVML's current max instead.
+            double? expectedMax = _roles?.MaxSlot is not null ? _maxW : (_info?.MaxLimitW is double m && !double.IsNaN(m) ? m : (double?)null);
+            var restart = await _rom.HotRestartAsync(pnpId, expectedMax, force: true).ConfigureAwait(true);
             if (!restart.Ok)
             {
                 // The slots are staged in the key; a later apply or the vBIOS kit can retry the restart.
@@ -711,6 +716,7 @@ public sealed class TuningViewModel : TabViewModel
             LiveLine = L.T("ui.rom.live", ("staged", string.Join(", ", writes.Select(x => x.Label))),
                 ("ceiling", Format.WattsWhole(_info?.MaxLimitW ?? double.NaN, L.Culture)));
             ReadBack.Show(ResultText.Describe(L, restart), BannerKind.Success);
+            PersistentApplied?.Invoke(this, EventArgs.Empty);
         }
         finally
         {
@@ -768,7 +774,7 @@ public sealed class TuningViewModel : TabViewModel
     }
 
     /// <summary>Re-reads the driver's persistent slots and re-resolves which control maps to which slot.</summary>
-    async Task ReloadRomSlotsAsync()
+    public async Task ReloadRomSlotsAsync()
     {
         string? pnpId = await Task.Run(() => _rom.FindGpuPnpId()).ConfigureAwait(true);
         if (pnpId == null) return;
